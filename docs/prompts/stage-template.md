@@ -28,4 +28,6 @@
 - [ ] `gate-checklist.md` 更新为当前切片并勾选
 - [ ] `AGENT_LOG.md` 记录证据 + 放行决定
 - [ ] `context-snapshot.md` 更新已完成事实
+- [ ] `.env.example` 补新增环境变量（若有新配置项）
+- [ ] `README.txt` 同步测试数与新功能（若有）
 - [ ] 提交信息含阶段/迭代名（`阶段N` / `迭代N切片X.Y`）
