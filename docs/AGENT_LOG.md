@@ -166,4 +166,17 @@
   - `pytest -q` → **33 passed**
   - 真实冒烟：`[步骤 1] 调用工具 write_file…` `↳ 已写入…` `[步骤 2] 调用工具 execute_command…` `↳ hello | [exit_code: 0]`，SMOKE EXIT=0
 - **设计决策**：过程日志走 stdout（而非 stderr），避免 PowerShell 红色噪音；最终答案在最后一行
+- **人工放行决定**：通过
+
+## 阶段 6：提交物
+
+- **时间**：2026-08-28
+- **给 Agent 的任务**：产出三项提交物（README.txt / 视频脚本 / 推送），核对题目要求
+- **Agent 修改了什么**：
+  - `README.txt`（≤1000 汉字：仓库地址 / 如何运行 / 特色功能 / 其它说明）
+  - `docs/video-script.md`（2 分钟演示脚本：演示真实任务 + 讲解核心设计）
+  - 更新 `docs/context-pack.md`、`docs/gate-checklist.md`
+- **检查证据**：
+  - README.txt 汉字数（脚本统计）
+  - 提交历史：阶段 0–6 完整
 - **人工放行决定**：（待用户确认：通过 / 重试 / 降级 / 停止）

@@ -1,6 +1,6 @@
 # context-snapshot.md — 已完成事实与未决问题
 
-## 已完成事实（截至阶段 5）
+## 已完成事实（截至阶段 6）
 
 - 需求来源已抽取：`requirement_doc/requierment_extracted.txt`
 - 关键决策已确认：Python + DeepSeek API + 核心闭环 MVP
@@ -14,15 +14,12 @@
 - 阶段 5 集成回归通过：3 个真实任务（写+执行 / 改+验证 / 列+搜索）全部闭环，32 测试无回退
 - D1 已补：主循环打印每步工具调用与结果摘要（stdout），`pytest` 33 passed
 - CHECKLIST：A–F 全部通过（31 项）
+- 阶段 6 提交物：README.txt（272 汉字）+ 视频脚本 docs/video-script.md
 
 ## 未完成 / 未决
 
-- 提交物（阶段 6）：README.txt（≤1000 字）+ 视频 + 推送 stage 4/5 到远程
-
-## 下一阶段资料
-
-- 阶段 6（提交物）需要：README.txt、2 分钟演示视频脚本、推送
-- 若补 D1：在 `agent/loop.py` 每步打印「工具名 + 参数 + 观测摘要」
+- 视频录制与 zip 打包（用户自行完成）：README.txt 与视频脚本已就绪
+- push stage 4/5/6 到远程触发 CI（若尚未推送）
 
 ## 不再重复讨论的决定
 
