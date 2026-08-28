@@ -119,3 +119,22 @@
   - `api.github.com/repos/fatemeeting/CodeAgent` → private=False, default_branch=main
   - Actions runs：`CI` status=completed, **conclusion=success**（2026-08-28T08:18Z）
 - **人工放行决定**：通过
+
+## 阶段 4：上下文管理
+
+- **时间**：2026-08-28
+- **给 Agent 的任务**：自研 token 估算与历史截断，接入主循环与 `--max-context-tokens`
+- **Agent 修改了什么**：
+  - `agent/context.py`：`estimate_tokens`（ASCII≈4 字符/token、CJK≈1 字符/token）+ `truncate_history`（保留 system + 首条 user + 最近消息，丢弃孤儿 tool 消息以保证配对）
+  - `agent/config.py`：新增 `max_context_tokens`（默认 12000，读 `DEEPSEEK_MAX_CONTEXT_TOKENS`）
+  - `agent/loop.py`：每次调用模型前 `truncate_history`
+  - `agent/cli.py`：新增 `--max-context-tokens`
+  - `.env.example`：新增 `DEEPSEEK_MAX_CONTEXT_TOKENS`
+  - `tests/test_context.py`（7 用例）
+  - 更新 `docs/context-pack.md`、`docs/gate-checklist.md`
+- **检查证据**：
+  - `pytest -q` → **32 passed**（25 旧 + 7 context）
+  - `python -m agent --help` 显示 `--max-context-tokens`
+  - `compileall -q agent` → EXIT=0
+- **风险处置**：token 估算是启发式（不引入 tokenizer，留安全余量）；孤儿 tool 消息已做配对保护
+- **人工放行决定**：（待用户确认：通过 / 重试 / 降级 / 停止）

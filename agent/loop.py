@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from .config import Config
+from .context import truncate_history
 from .llm import LLMClient
 from .parser import parse_response
 from .tools import dispatch, tool_schemas
@@ -43,6 +44,7 @@ def run(config: Config, task: str, workdir: str = ".") -> str:
     tools = tool_schemas()
 
     for _ in range(config.max_iterations):
+        messages = truncate_history(messages, config.max_context_tokens)
         response = client.chat(messages, tools=tools)
         parsed = parse_response(response)
 

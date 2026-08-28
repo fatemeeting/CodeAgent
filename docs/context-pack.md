@@ -1,23 +1,22 @@
 # context-pack.md — 当前阶段上下文包
 
-> 当前阶段：**阶段 3（闭环循环）**
+> 当前阶段：**阶段 4（上下文管理）**
 
 ## 当前阶段目标
 
-实现完整主循环：解析模型输出（文本 / tool_calls 分流）、执行工具并回填结果、循环终止条件（无工具调用 / 最大迭代上限）、错误处理（工具异常回填）；CLI 接入 `--workdir`。用 mock 单测验证循环逻辑，再用真实任务端到端冒烟。
+实现对话历史管理与 token 预算截断：自研 token 估算（不引入 tokenizer）、截断时保留 system + 首条 user（任务）+ 最近消息、丢弃孤儿 tool 消息；接入主循环与 `--max-context-tokens`。
 
 ## 必须读
 
-- `SPEC.md`（范围：闭环循环、终止条件、错误处理）
-- `CHECKLIST.md`（A9–A12、B1、D1 项）
-- `AGENTS.md`（禁止事项与安全边界）
-- `agent/tools/__init__.py`（`tool_schemas()` / `dispatch()` 接口）
-- `docs/context-snapshot.md`（阶段 2 已完成事实）
+- `SPEC.md`（范围：上下文管理、token 截断）
+- `CHECKLIST.md`（B1 项；长对话不爆上下文）
+- `agent/loop.py`（消息队列结构）
+- `docs/context-snapshot.md`（阶段 3 已完成事实）
 
 ## 可读（按需）
 
-- `agent/llm.py`（`chat` 接口与重试）
-- `agent/config.py`（`Config` 字段）
+- `agent/config.py`（Config 字段）
+- `agent/parser.py`（消息重建格式）
 
 ## 不得读 / 不得改
 
@@ -26,5 +25,5 @@
 
 ## 输出要求
 
-- 产出：`agent/parser.py`、完整 `agent/loop.py`、`agent/cli.py`（加 `--workdir`）、`tests/test_parser.py`、`tests/test_loop.py`
-- 验收：`pytest -q` 免 key 全绿；真实任务「创建 hello.py 并运行」闭环
+- 产出：`agent/context.py`、`agent/config.py`（加 `max_context_tokens`）、`agent/loop.py`（接入截断）、`agent/cli.py`（加 `--max-context-tokens`）、`tests/test_context.py`
+- 验收：`pytest -q` 免 key 全绿

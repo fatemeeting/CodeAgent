@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 def _project_root() -> Path:
-    """返回项目根目录（agent 包的上一级，即 coding-agent/）。"""
+    """返回项目根目录（agent 包的上一级）。"""
     return Path(__file__).resolve().parent.parent
 
 
@@ -51,6 +51,7 @@ class Config:
     base_url: str
     model: str
     max_iterations: int
+    max_context_tokens: int = 12000  # 上下文 token 预算（自研估算），超出则裁剪历史
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -65,4 +66,5 @@ class Config:
             base_url=os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
             model=os.environ.get("DEEPSEEK_MODEL", "deepseek-chat"),
             max_iterations=int(os.environ.get("DEEPSEEK_MAX_ITERATIONS", "30")),
+            max_context_tokens=int(os.environ.get("DEEPSEEK_MAX_CONTEXT_TOKENS", "12000")),
         )
