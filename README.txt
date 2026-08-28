@@ -28,8 +28,9 @@ python -m agent "创建 hello.py 打印 Hello 并运行"
 - 任务规划（--plan）：执行前先生成分步计划
 - 并行工具调用：多个独立工具并发执行
 - 危险命令确认（--confirm）：rm / del 等执行前人工确认
+- Web 界面：python -m agent.web（自写标准库 HTTP + SSE 流式推送）
 - 过程可读：实时打印每步工具调用与结果
-- 54 个单元测试（mock LLM 免 key）+ GitHub Actions CI + pre-commit 密钥扫描
+- 57 个单元测试（mock LLM 免 key）+ GitHub Actions CI + pre-commit 密钥扫描
 
 ## 其它说明
 - 凭据一律通过环境变量或 .env 提供，绝不入库

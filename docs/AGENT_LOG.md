@@ -256,5 +256,20 @@
   - `pytest -q` → **54 passed**
   - `--plan` 冒烟：先输出 6 步计划，再按计划执行
   - `--confirm` 冒烟：`rm t.txt`、`rm -f ...` 均被拦截（非交互 EOF → 安全拒绝）；模型尝试 `python3 -c "os.remove(...)"` 绕过——证明拦截生效
-- **风险备注**：`is_dangerous` 是**模式匹配的提示性防护**，非安全沙箱（模型可用 os.remove 等间接手段绕过）——答辩需明确此边界，真正的隔离需命令沙箱（迭代 6 候选）
+- **风险备注**：`is_dangerous` 是**模式匹配的提示性防护**，非安全沙箱（模型可用 os.remove 等间接手段绕过）——答辩需明确此边界，真正的隔离需命令沙箱（迭代 7 候选）
+- **人工放行决定**：通过
+
+## 迭代 6：Web 界面
+
+- **时间**：2026-08-28
+- **给 Agent 的任务**：切片 6.1 极简 Web 终端；切片 6.2 SSE 流式推送
+- **Agent 修改了什么**：
+  - `agent/web.py`：自写标准库 HTTP 服务（`ThreadingHTTPServer`，零新依赖）——`GET /` 表单页、`POST /run`（`run_task_output` 用 `redirect_stdout` 捕获全部输出）、`GET /events` SSE（`_SseWriter` 队列 + 后台线程 + [DONE] 哨兵）；入口 `python -m agent.web`
+  - `tests/test_web.py`（+3 用例，含起真实服务的集成测试）
+  - 更新 `SPEC.md`（迭代 6）、`CHECKLIST.md`（K 节）、`README.txt`、`docs/context-pack.md`、`docs/gate-checklist.md`
+- **检查证据**：
+  - `pytest -q` → **57 passed**
+  - `POST /run` 冒烟：真实任务输出过程 + 最终答复，ok=True
+  - `GET /events` 冒烟：SSE 逐条推送（工具调用 / 观测 / 最终答复 / [DONE]）
+- **设计决策**：Web 服务也用标准库自写（不引入 Flask/FastAPI），维持「仅 openai」依赖约束；过程输出复用 D1 的 stdout 打印（`redirect_stdout` 转发到 SSE 队列）
 - **人工放行决定**：（待用户确认：通过 / 重试 / 降级 / 停止）

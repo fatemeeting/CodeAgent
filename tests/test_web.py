@@ -61,3 +61,24 @@ def test_web_server_roundtrip():
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_web_sse_stream():
+    server = ThreadingHTTPServer(("127.0.0.1", 0), AgentHandler)
+    server.config = _config()
+    server.workdir = "."
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = server.server_address[1]
+    client = mock.Mock()
+    client.chat.return_value = _response("完成")
+    try:
+        with mock.patch("agent.web.LLMClient", return_value=client):
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/events?task=hi") as resp:
+                raw = resp.read().decode("utf-8")
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert "data:" in raw
+    assert "完成" in raw
+    assert "[DONE]" in raw

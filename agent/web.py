@@ -9,6 +9,9 @@ import argparse
 import contextlib
 import io
 import json
+import queue
+import threading
+import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from .config import Config
@@ -33,21 +36,16 @@ INDEX_HTML = """<!DOCTYPE html>
 <button onclick="run()">运行</button>
 <pre id="out">等待任务…</pre>
 <script>
-async function run() {
+function run() {
   const task = document.getElementById('task').value;
   const out = document.getElementById('out');
   out.textContent = '运行中…\\n';
-  try {
-    const resp = await fetch('/run', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({task}),
-    });
-    const data = await resp.json();
-    out.textContent = data.ok ? data.output : ('错误：' + data.error);
-  } catch (e) {
-    out.textContent = '请求失败：' + e;
-  }
+  const es = new EventSource('/events?task=' + encodeURIComponent(task));
+  es.onmessage = function (e) {
+    if (e.data === '[DONE]') { es.close(); return; }
+    out.textContent += JSON.parse(e.data).text;
+  };
+  es.onerror = function () { es.close(); };
 }
 </script>
 </body>
@@ -66,6 +64,21 @@ def run_task_output(config: Config, task: str, workdir: str = ".") -> str:
     return buf.getvalue()
 
 
+class _SseWriter:
+    """把 stdout 写入转发到队列，供 SSE 流式发送。"""
+
+    def __init__(self, q: queue.Queue):
+        self._q = q
+
+    def write(self, text: str) -> int:
+        if text:
+            self._q.put(text)
+        return len(text)
+
+    def flush(self) -> None:
+        pass
+
+
 class AgentHandler(BaseHTTPRequestHandler):
     def do_GET(self):  # noqa: N802 - BaseHTTPRequestHandler 约定命名
         if self.path == "/":
@@ -75,8 +88,53 @@ class AgentHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(data)))
             self.end_headers()
             self.wfile.write(data)
+        elif self.path.startswith("/events"):
+            self._handle_events()
         else:
             self.send_error(404)
+
+    def _handle_events(self) -> None:
+        """SSE 流式：后台线程运行 agent，逐条推送输出，[DONE] 结束。"""
+        parsed = urllib.parse.urlparse(self.path)
+        task = (urllib.parse.parse_qs(parsed.query).get("task") or [""])[0].strip()
+        if not task:
+            self.send_error(400, "缺少 task 参数")
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-cache")
+        self.end_headers()
+
+        q: queue.Queue = queue.Queue()
+        writer = _SseWriter(q)
+        config = self.server.config
+        workdir = self.server.workdir
+
+        def worker() -> None:
+            try:
+                with contextlib.redirect_stdout(writer):
+                    client = LLMClient(config)
+                    result = run(config, task, workdir=workdir, client=client)
+                    if not config.stream:
+                        print(result)
+            except Exception as exc:  # noqa: BLE001 - 错误推送给前端
+                print(f"错误：{exc}")
+            finally:
+                q.put(None)  # 结束哨兵
+
+        threading.Thread(target=worker, daemon=True).start()
+        try:
+            while True:
+                item = q.get()
+                if item is None:
+                    break
+                payload = json.dumps({"text": item}, ensure_ascii=False)
+                self.wfile.write(f"data: {payload}\n\n".encode("utf-8"))
+                self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+        self.wfile.write(b"data: [DONE]\n\n")
+        self.wfile.flush()
 
     def do_POST(self):  # noqa: N802
         if self.path == "/run":
