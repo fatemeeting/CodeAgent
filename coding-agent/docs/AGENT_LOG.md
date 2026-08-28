@@ -51,4 +51,39 @@
   - `python -m agent --help` → 正常显示中文用法，EXIT=0
   - `python -m agent "你好"` → 返回「你好！很高兴为你提供编程帮助。有什么可以帮你的吗？」，EXIT=0（真实 DeepSeek 调用）
 - **风险处置**：openai 3.x 兼容性风险已解除（实测构造参数与 tool calling 参数名兼容）
+- **人工放行决定**：通过
+
+## 阶段 2：工具层
+
+- **时间**：2026-08-28
+- **给 Agent 的任务**：实现六个本地工具 + JSON Schema + 注册表，mock 单测验证「工具名 → 参数 → 处理函数」映射
+- **Agent 修改了什么**：
+  - `agent/tools/base.py`：`Tool`（name/description/parameters/handler + `to_schema`）、`resolve_path`、`Handler` 类型
+  - `agent/tools/file_tools.py`：`read_file`（UTF-8 + 100KB 截断）、`write_file`（自动建父目录）、`edit_file`（多处匹配需 `replace_all`）
+  - `agent/tools/shell_tools.py`：`execute_command`（subprocess + 超时 + 输出截断 + stdout/stderr/退出码）
+  - `agent/tools/fs_tools.py`：`list_directory`、`search_content`（递归 + 跳过 .git/.venv 等 + 上限 200 条）
+  - `agent/tools/__init__.py`：`TOOLS` 注册表 + `tool_schemas()` + `dispatch()`
+  - `tests/test_tools.py`（10 用例）、`conftest.py`（sys.path 注入）
+  - 更新 `docs/context-pack.md`、`docs/gate-checklist.md` 到阶段 2
+- **检查证据**：
+  - `python -m pytest -q` → **10 passed in 0.28s**，EXIT=0（全程免 key）
+  - execute_command 的 subprocess 管道捕获在沙箱正常（`echo hello`、`sys.exit(3)` 均验证）
+- **风险处置**：无
+- **人工放行决定**：通过
+
+## CI/CD 基础设施（阶段 2 补充）
+
+- **时间**：2026-08-28
+- **给 Agent 的任务**：补齐测试覆盖（config/llm），搭建 git 仓库 + pre-commit 钩子 + GitHub Actions CI
+- **Agent 修改了什么**：
+  - `tests/test_config.py`（4 用例：.env 解析、默认值、缺 key 报错）、`tests/test_llm.py`（3 用例：返回、重试耗尽抛 LLMError、重试后成功）
+  - `scripts/gate_check.py`（pre-commit：拦 .env + 扫 `sk-` 密钥 + 查 gate 文件）、`scripts/commit_msg_check.py`（提交信息含阶段名）、`scripts/install_hooks.py`
+  - `.github/workflows/ci.yml`（compileall + pytest，mock 免 key）
+  - `git init`（分支 main）+ 分阶段提交：`bf400e5` 阶段0-2、本提交 CI/CD
+  - 更新 `AGENTS.md`（第 6 节 CI/CD 与提交规范）
+- **检查证据**：
+  - `python -m pytest -q` → **17 passed**（10 工具 + 4 config + 3 llm）
+  - 提交树校验：`.env` / `.venv` 未被跟踪
+  - gate_check 直测 exit 0；密钥正则命中真实 key、不误伤占位符；commit_msg 合法→0 / 非法→1
+- **风险备注**：本沙箱限制了 Git Bash 的共享内存（`sh.exe CreateFileMapping error 5`），shell 包装的钩子在此沙箱内无法端到端运行，但 Python 逻辑已直测通过；在正常机器与 GitHub Actions 上钩子可正常生效
 - **人工放行决定**：（待用户确认：通过 / 重试 / 降级 / 停止）
