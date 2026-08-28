@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from .config import Config
@@ -58,6 +59,24 @@ def _assistant_message(parsed: Any) -> dict[str, Any]:
     return msg
 
 
+def _safe_dispatch(name: str, arguments: dict[str, Any], workdir: str) -> str:
+    try:
+        return dispatch(name, arguments, workdir)
+    except Exception as exc:  # noqa: BLE001 - 工具异常回填为观测，不中断循环
+        return f"错误：工具 {name} 执行异常：{exc}"
+
+
+def _execute_tool_calls(tool_calls: list[Any], workdir: str) -> list[str]:
+    """并行执行多个工具调用（API 契约：同批 tool_calls 相互独立）；返回按序观测。"""
+    if len(tool_calls) == 1:
+        return [_safe_dispatch(tool_calls[0].name, tool_calls[0].arguments, workdir)]
+    with ThreadPoolExecutor(max_workers=len(tool_calls)) as pool:
+        futures = [
+            pool.submit(_safe_dispatch, tc.name, tc.arguments, workdir) for tc in tool_calls
+        ]
+        return [f.result() for f in futures]
+
+
 def run_turn(
     client: LLMClient,
     config: Config,
@@ -94,10 +113,8 @@ def run_turn(
         messages.append(_assistant_message(parsed))
         for tc in parsed.tool_calls:
             _log_tool_call(step, tc.name, tc.arguments)
-            try:
-                observation = dispatch(tc.name, tc.arguments, workdir)
-            except Exception as exc:  # noqa: BLE001 - 工具异常回填为观测，不中断循环
-                observation = f"错误：工具 {tc.name} 执行异常：{exc}"
+        observations = _execute_tool_calls(parsed.tool_calls, workdir)
+        for tc, observation in zip(parsed.tool_calls, observations):
             if len(observation) > MAX_TOOL_TEXT:
                 observation = observation[:MAX_TOOL_TEXT] + "\n...（观测过长已截断）"
             _log_observation(observation)

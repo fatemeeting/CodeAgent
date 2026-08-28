@@ -145,6 +145,27 @@ def test_run_stream_uses_chat_stream():
     client.chat.assert_not_called()
 
 
+def test_run_executes_multiple_tool_calls(tmp_path):
+    calls = [
+        _tool_call("c1", "write_file", '{"path": "a.txt", "content": "A"}'),
+        _tool_call("c2", "write_file", '{"path": "b.txt", "content": "B"}'),
+    ]
+    responses = [
+        _response(content=None, tool_calls=calls),
+        _response(content="完成"),
+    ]
+    client = mock.Mock()
+    client.chat.side_effect = responses
+    with mock.patch("agent.loop.LLMClient", return_value=client):
+        out = run(_config(), "创建两个文件", workdir=str(tmp_path))
+    assert out == "完成"
+    assert (tmp_path / "a.txt").read_text(encoding="utf-8") == "A"
+    assert (tmp_path / "b.txt").read_text(encoding="utf-8") == "B"
+    second_messages = client.chat.call_args_list[1].args[0]
+    tool_ids = [m["tool_call_id"] for m in second_messages if m.get("role") == "tool"]
+    assert tool_ids == ["c1", "c2"]  # 观测按调用顺序回填
+
+
 def test_run_logs_tool_calls(capsys, tmp_path):
     responses = [
         _response(content=None, tool_calls=[_tool_call()]),

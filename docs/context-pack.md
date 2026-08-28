@@ -1,17 +1,16 @@
 # context-pack.md — 当前阶段上下文包
 
-> 当前阶段：**迭代 5 · 切片 5.1（任务规划 plan-first）**
+> 当前阶段：**迭代 5 · 切片 5.2（并行工具调用）**
 
 ## 当前阶段目标
 
-执行前先让模型输出分步计划（3–6 步），打印后把计划注入执行上下文；`--plan` 开启。
+模型一次返回多个 tool_calls 时并发执行（API 契约：同批工具相互独立），观测仍按调用顺序回填；单工具不变。
 
 ## 必须读
 
 - `SPEC.md`（迭代 5 范围）
-- `agent/suggest.py`（同款「复用 client 再调一次」模式）
-- `agent/parser.py`（`parse_response`）
-- `docs/context-snapshot.md`
+- `agent/loop.py`（`run_turn` 工具执行段）
+- `agent/tools/__init__.py`（`dispatch`）
 
 ## 不得读 / 不得改
 
@@ -19,5 +18,5 @@
 
 ## 输出要求
 
-- 产出：`agent/plan.py`、`agent/cli.py`（`--plan`）、`tests/test_plan.py`
-- 验收：`pytest -q` 全绿；`--plan` 真实冒烟
+- 产出：`agent/loop.py`（ThreadPoolExecutor 并行 + 日志顺序）、`tests/test_loop.py`（+1）
+- 验收：`pytest -q` 全绿
