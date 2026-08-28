@@ -23,31 +23,83 @@ INDEX_HTML = """<!DOCTYPE html>
 <html lang="zh">
 <head>
 <meta charset="utf-8">
-<title>编程智能体</title>
+<title>编程智能体 · Coding Agent</title>
 <style>
-  body { font-family: Consolas, monospace; margin: 2rem; background: #101418; color: #d8dee9; }
-  input { width: 72%; padding: .5rem; background: #1c2128; color: #d8dee9; border: 1px solid #333; }
-  button { padding: .5rem 1.2rem; cursor: pointer; background: #2e7d32; color: #fff; border: none; }
-  pre { white-space: pre-wrap; background: #000; padding: 1rem; min-height: 22rem; border: 1px solid #333; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", "Microsoft YaHei", sans-serif; background: #0f1115; color: #d8dee9; height: 100vh; display: flex; flex-direction: column; }
+  header { display: flex; align-items: center; gap: .8rem; padding: .6rem 1rem; background: #161a21; border-bottom: 1px solid #232a35; }
+  header h1 { font-size: .95rem; margin: 0; font-weight: 600; white-space: nowrap; }
+  .ws { flex: 1; }
+  .ws input { width: 100%; padding: .4rem .6rem; background: #0f1115; color: #d8dee9; border: 1px solid #2c3440; border-radius: 4px; font-size: .85rem; }
+  #chat { flex: 1; overflow-y: auto; padding: 1rem 1.2rem; }
+  .tip { color: #8b949e; font-size: .82rem; }
+  .msg { display: flex; margin-bottom: .9rem; }
+  .msg.user { justify-content: flex-end; }
+  .bubble { max-width: 80%; padding: .55rem .85rem; border-radius: 10px; white-space: pre-wrap; word-break: break-word; font-size: .9rem; line-height: 1.55; }
+  .msg.user .bubble { background: #1f4d2e; border: 1px solid #2e7d32; }
+  .msg.agent .bubble { background: #161a21; border: 1px solid #232a35; font-family: Consolas, "Courier New", monospace; }
+  .tool { color: #58a6ff; }
+  .obs { color: #7ee787; }
+  footer { display: flex; gap: .5rem; padding: .7rem 1rem; background: #161a21; border-top: 1px solid #232a35; }
+  footer textarea { flex: 1; resize: none; height: 46px; padding: .5rem .6rem; background: #0f1115; color: #d8dee9; border: 1px solid #2c3440; border-radius: 6px; font-size: .9rem; font-family: inherit; }
+  footer button { padding: 0 1.3rem; background: #2e7d32; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; }
 </style>
 </head>
 <body>
-<h2>编程智能体（Coding Agent）</h2>
-<input id="task" placeholder="输入编程任务，如：创建 hello.py 打印 Hello 并运行">
-<button onclick="run()">运行</button>
-<pre id="out">等待任务…</pre>
+<header>
+  <h1>🤖 编程智能体</h1>
+  <div class="ws"><input id="ws" placeholder="工作区目录（先指定，如 E:\\demo，留空用默认）"></div>
+</header>
+<div id="chat"><div class="tip">先指定上方工作区，再发送任务；agent 将在该工作区内完成项目。</div></div>
+<footer>
+  <textarea id="task" placeholder="输入编程任务，Enter 发送（Shift+Enter 换行）"></textarea>
+  <button onclick="send()">发送</button>
+</footer>
 <script>
-function run() {
-  const task = document.getElementById('task').value;
-  const out = document.getElementById('out');
-  out.textContent = '运行中…\\n';
-  const es = new EventSource('/events?task=' + encodeURIComponent(task));
+const chat = document.getElementById('chat');
+function addMsg(role) {
+  const wrap = document.createElement('div');
+  wrap.className = 'msg ' + role;
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  bubble._raw = '';
+  wrap.appendChild(bubble);
+  chat.appendChild(wrap);
+  chat.scrollTop = chat.scrollHeight;
+  return bubble;
+}
+function render(bubble) {
+  bubble.innerHTML = '';
+  bubble._raw.split('\\n').forEach(function (line, i) {
+    if (i > 0) bubble.appendChild(document.createElement('br'));
+    let node;
+    if (line.indexOf('[步骤') === 0) { node = document.createElement('span'); node.className = 'tool'; }
+    else if (line.indexOf('        ↳') === 0) { node = document.createElement('span'); node.className = 'obs'; }
+    else { node = document.createElement('span'); }
+    node.textContent = line;
+    bubble.appendChild(node);
+  });
+}
+function send() {
+  const taskEl = document.getElementById('task');
+  const task = taskEl.value.trim();
+  if (!task) return;
+  const ws = document.getElementById('ws').value.trim();
+  taskEl.value = '';
+  const ub = addMsg('user'); ub._raw = task; render(ub);
+  const ab = addMsg('agent');
+  const es = new EventSource('/events?task=' + encodeURIComponent(task) + '&workdir=' + encodeURIComponent(ws));
   es.onmessage = function (e) {
-    if (e.data === '[DONE]') { es.close(); return; }
-    out.textContent += JSON.parse(e.data).text;
+    if (e.data === '[DONE]') { es.close(); ab._raw += '\\n✓ 完成'; render(ab); return; }
+    ab._raw += JSON.parse(e.data).text;
+    render(ab);
+    chat.scrollTop = chat.scrollHeight;
   };
   es.onerror = function () { es.close(); };
 }
+document.getElementById('task').addEventListener('keydown', function (e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+});
 </script>
 </body>
 </html>
