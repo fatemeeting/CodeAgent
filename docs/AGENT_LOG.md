@@ -137,4 +137,19 @@
   - `python -m agent --help` 显示 `--max-context-tokens`
   - `compileall -q agent` → EXIT=0
 - **风险处置**：token 估算是启发式（不引入 tokenizer，留安全余量）；孤儿 tool 消息已做配对保护
+- **人工放行决定**：通过
+
+## 阶段 5：集成回归
+
+- **时间**：2026-08-28
+- **给 Agent 的任务**：跑 2–3 个真实任务回归，核对旧功能不回退；同步 CHECKLIST 进度
+- **Agent 修改了什么**：无代码改动（纯回归）；更新 `docs/context-pack.md`、`docs/gate-checklist.md`、`CHECKLIST.md`（勾选）
+- **检查证据**：
+  - 回归任务 1（写+执行）：创建 `calc.py` + 验证 `add(2,3)==5` → 闭环，EXIT=0
+  - 回归任务 2（改+验证）：`add`→`multiply` + 验证 `multiply(2,3)==6` → 闭环，EXIT=0
+  - 回归任务 3（列+搜索）：`list_directory` 找到 `calc.py`；`search_content` 命中 `calc.py:1 def multiply(a, b):` → 闭环，EXIT=0
+  - 独立核验：`calc.py` 内容正确、独立运行输出 `6`
+  - `pytest -q` → **32 passed**（无回退）
+  - B4 无被禁依赖（grep 无命中）；C1 无真实密钥（`git grep sk-[A-Za-z0-9]{24,}` 无命中）
+- **风险处置**：无（3 个任务全过，无失败项）
 - **人工放行决定**：（待用户确认：通过 / 重试 / 降级 / 停止）

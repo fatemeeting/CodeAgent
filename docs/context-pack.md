@@ -1,22 +1,20 @@
 # context-pack.md — 当前阶段上下文包
 
-> 当前阶段：**阶段 4（上下文管理）**
+> 当前阶段：**阶段 5（集成回归）**
 
 ## 当前阶段目标
 
-实现对话历史管理与 token 预算截断：自研 token 估算（不引入 tokenizer）、截断时保留 system + 首条 user（任务）+ 最近消息、丢弃孤儿 tool 消息；接入主循环与 `--max-context-tokens`。
+跑 2–3 个真实任务回归：写文件 + 执行、改文件 + 验证、列目录 + 搜索，核对旧功能（工具层 / 闭环循环 / 上下文管理）不回退；失败定位到具体切片，只修失败项。
 
 ## 必须读
 
-- `SPEC.md`（范围：上下文管理、token 截断）
-- `CHECKLIST.md`（B1 项；长对话不爆上下文）
-- `agent/loop.py`（消息队列结构）
-- `docs/context-snapshot.md`（阶段 3 已完成事实）
+- `SPEC.md`（阶段 5：集成回归）
+- `CHECKLIST.md`（A3–A12、B、C 项）
+- `docs/context-snapshot.md`（阶段 4 已完成事实）
 
 ## 可读（按需）
 
-- `agent/config.py`（Config 字段）
-- `agent/parser.py`（消息重建格式）
+- `agent/tools/*`（工具实现）
 
 ## 不得读 / 不得改
 
@@ -25,5 +23,5 @@
 
 ## 输出要求
 
-- 产出：`agent/context.py`、`agent/config.py`（加 `max_context_tokens`）、`agent/loop.py`（接入截断）、`agent/cli.py`（加 `--max-context-tokens`）、`tests/test_context.py`
-- 验收：`pytest -q` 免 key 全绿
+- 产出：回归任务证据（写入 AGENT_LOG.md）、CHECKLIST.md 勾选
+- 验收：3 个真实任务闭环；`pytest -q` 全绿；旧功能无回退
