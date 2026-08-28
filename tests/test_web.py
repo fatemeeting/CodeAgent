@@ -89,6 +89,40 @@ def test_web_run_rejects_missing_workdir(tmp_path):
         server.server_close()
 
 
+def test_web_pick_workspace(tmp_path):
+    server = ThreadingHTTPServer(("127.0.0.1", 0), AgentHandler)
+    server.config = _config()
+    server.workdir = "."
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = server.server_address[1]
+    try:
+        with mock.patch("agent.web.pick_workspace", return_value=str(tmp_path)):
+            req = urllib.request.Request(
+                f"http://127.0.0.1:{port}/pick-workspace",
+                data=b"{}",
+                headers={"Content-Type": "application/json"},
+            )
+            with urllib.request.urlopen(req) as resp:
+                result = json.loads(resp.read().decode("utf-8"))
+            assert result["ok"] is True
+            assert result["path"] == str(tmp_path)
+        # 未选择时优雅降级
+        with mock.patch("agent.web.pick_workspace", return_value=None):
+            req = urllib.request.Request(
+                f"http://127.0.0.1:{port}/pick-workspace",
+                data=b"{}",
+                headers={"Content-Type": "application/json"},
+            )
+            with urllib.request.urlopen(req) as resp:
+                result = json.loads(resp.read().decode("utf-8"))
+            assert result["ok"] is False
+            assert "无法唤起" in result["error"]
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
 def test_web_sse_stream():
     server = ThreadingHTTPServer(("127.0.0.1", 0), AgentHandler)
     server.config = _config()

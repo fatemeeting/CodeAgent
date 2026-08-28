@@ -29,8 +29,9 @@ INDEX_HTML = """<!DOCTYPE html>
   body { margin: 0; font-family: "Segoe UI", "Microsoft YaHei", sans-serif; background: #0f1115; color: #d8dee9; height: 100vh; display: flex; flex-direction: column; }
   header { display: flex; align-items: center; gap: .8rem; padding: .6rem 1rem; background: #161a21; border-bottom: 1px solid #232a35; }
   header h1 { font-size: .95rem; margin: 0; font-weight: 600; white-space: nowrap; }
-  .ws { flex: 1; }
-  .ws input { width: 100%; padding: .4rem .6rem; background: #0f1115; color: #d8dee9; border: 1px solid #2c3440; border-radius: 4px; font-size: .85rem; }
+  .ws { flex: 1; display: flex; gap: .4rem; }
+  .ws input { flex: 1; width: 100%; padding: .4rem .6rem; background: #0f1115; color: #d8dee9; border: 1px solid #2c3440; border-radius: 4px; font-size: .85rem; }
+  .ws .pick { padding: 0 .8rem; background: #1c2128; color: #d8dee9; border: 1px solid #2c3440; border-radius: 4px; cursor: pointer; font-size: .85rem; white-space: nowrap; }
   #chat { flex: 1; overflow-y: auto; padding: 1rem 1.2rem; }
   .tip { color: #8b949e; font-size: .82rem; }
   .msg { display: flex; margin-bottom: .9rem; }
@@ -48,7 +49,10 @@ INDEX_HTML = """<!DOCTYPE html>
 <body>
 <header>
   <h1>🤖 编程智能体</h1>
-  <div class="ws"><input id="ws" placeholder="工作区目录（先指定，如 E:\\demo，留空用默认）"></div>
+  <div class="ws">
+    <input id="ws" placeholder="工作区目录（先指定，如 E:\\demo，留空用默认）">
+    <button class="pick" onclick="pickWs()" title="唤起系统文件夹选择器">📂 选择</button>
+  </div>
 </header>
 <div id="chat"><div class="tip">先指定上方工作区，再发送任务；agent 将在该工作区内完成项目。</div></div>
 <footer>
@@ -79,6 +83,14 @@ function render(bubble) {
     node.textContent = line;
     bubble.appendChild(node);
   });
+}
+async function pickWs() {
+  try {
+    const resp = await fetch('/pick-workspace', {method: 'POST'});
+    const data = await resp.json();
+    if (data.ok) { document.getElementById('ws').value = data.path; }
+    else if (data.error) { alert(data.error); }
+  } catch (e) { alert('请求失败：' + e); }
 }
 function send() {
   const taskEl = document.getElementById('task');
@@ -115,6 +127,24 @@ def run_task_output(config: Config, task: str, workdir: str = ".") -> str:
         if not config.stream:
             print(result)
     return buf.getvalue()
+
+
+def pick_workspace() -> str | None:
+    """唤起系统原生文件夹选择器（tkinter 标准库）；失败或无选择返回 None。"""
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+    except ImportError:
+        return None
+    try:
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        path = filedialog.askdirectory(title="选择工作区根目录")
+        root.destroy()
+        return path or None
+    except Exception:  # noqa: BLE001 - 无图形环境时优雅降级
+        return None
 
 
 class _SseWriter:
@@ -208,6 +238,22 @@ class AgentHandler(BaseHTTPRequestHandler):
                 result = {"ok": True, "output": output}
             except Exception as exc:  # noqa: BLE001 - 错误回传前端展示
                 result = {"ok": False, "error": str(exc)}
+            data = json.dumps(result, ensure_ascii=False).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+        elif self.path == "/pick-workspace":
+            try:
+                path = pick_workspace()
+                result = (
+                    {"ok": True, "path": path}
+                    if path
+                    else {"ok": False, "path": None, "error": "未选择目录或无法唤起系统对话框（可手动输入）"}
+                )
+            except Exception as exc:  # noqa: BLE001
+                result = {"ok": False, "path": None, "error": str(exc)}
             data = json.dumps(result, ensure_ascii=False).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
