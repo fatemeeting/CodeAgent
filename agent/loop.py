@@ -70,7 +70,10 @@ def run_turn(
     pending_final: str | None = None
     for step in range(1, config.max_iterations + 1):
         messages[:] = truncate_history(messages, config.max_context_tokens)
-        response = client.chat(messages, tools=tools)
+        if config.stream:
+            response = client.chat_stream(messages, tools=tools)
+        else:
+            response = client.chat(messages, tools=tools)
         parsed = parse_response(response)
 
         # 终止条件 1：模型未请求工具，视为最终答复
@@ -101,7 +104,10 @@ def run_turn(
             messages.append({"role": "tool", "tool_call_id": tc.id, "content": observation})
 
     # 终止条件 2：达到最大迭代上限
-    return f"（达到最大迭代次数 {config.max_iterations}，任务未完成）"
+    final = f"（达到最大迭代次数 {config.max_iterations}，任务未完成）"
+    if config.stream:
+        print(final)  # 流式模式下该消息非模型输出，需自行打印
+    return final
 
 
 def run(

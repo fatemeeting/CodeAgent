@@ -80,5 +80,6 @@ def repl(config: Config, workdir: str = ".") -> int:
         # action == "task"
         messages.append({"role": "user", "content": payload})
         result = run_turn(client, config, messages, tools, workdir)
-        print(result)
+        if not config.stream:
+            print(result)
     return 0

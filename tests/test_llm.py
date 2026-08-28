@@ -62,3 +62,22 @@ def test_chat_records_usage():
         "total_tokens": 150,
     }
     assert "100" in client.usage_summary_text()
+
+
+def test_chat_stream_reconstructs_response(capsys):
+    from agent.parser import parse_response
+
+    client = LLMClient(_config())
+    chunk1 = mock.Mock()
+    chunk1.usage = None
+    chunk1.choices = [mock.Mock(delta=mock.Mock(content="你", tool_calls=None))]
+    chunk2 = mock.Mock()
+    chunk2.usage = None
+    chunk2.choices = [mock.Mock(delta=mock.Mock(content="好", tool_calls=None))]
+    with mock.patch.object(
+        client._client.chat.completions, "create", return_value=iter([chunk1, chunk2])
+    ):
+        resp = client.chat_stream([{"role": "user", "content": "x"}])
+    parsed = parse_response(resp)
+    assert parsed.content == "你好"
+    assert capsys.readouterr().out == "你好\n"  # 逐 token 打印 + 换行

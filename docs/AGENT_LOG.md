@@ -224,4 +224,20 @@
   - `pytest -q` → **46 passed**
   - `--usage` 冒烟：prompt 2803 / completion 134 / 总计 2937（估算 $0.0009）
   - `--reflect` 冒烟：正常完成（反思透明，返回原答复）
+- **人工放行决定**：通过
+
+## 迭代 4：猜你想问 + 流式输出
+
+- **时间**：2026-08-28
+- **给 Agent 的任务**：切片 4.1 猜你想问；切片 4.2 流式输出
+- **Agent 修改了什么**：
+  - 切片 4.1：`agent/suggest.py`（`suggest_followups` 复用 client 调一次模型，不带工具）+ `agent/cli.py` `--suggest`
+  - 切片 4.2：`agent/llm.py` `chat_stream`（逐 token 打印 + 重建 tool_calls，返回等价响应）+ `agent/config.py` `stream` + `agent/loop.py` 接入 + `agent/cli.py` `--stream`（流式不重复打印）+ `agent/repl.py`
+  - 测试：`tests/test_suggest.py`（+1）、`tests/test_llm.py`（+1）、`tests/test_loop.py`（+1）
+  - 更新 `SPEC.md`（迭代 4）、`docs/context-pack.md`、`docs/gate-checklist.md`
+- **检查证据**：
+  - `pytest -q` → **49 passed**
+  - `--suggest` 冒烟：输出 3 条后续问题建议
+  - `--stream` 冒烟：最终答复流式输出、无重复打印
+- **风险备注**：流式模式下 usage 统计可能不完整（部分网关流式不含 usage），属已知小限制
 - **人工放行决定**：（待用户确认：通过 / 重试 / 降级 / 停止）

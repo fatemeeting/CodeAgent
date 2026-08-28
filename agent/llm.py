@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from types import SimpleNamespace
 from typing import Any
 
 from openai import OpenAI
@@ -80,3 +81,74 @@ class LLMClient:
             f"token 用量：prompt {u['prompt_tokens']} / completion {u['completion_tokens']}"
             f" / 总计 {u['total_tokens']}（估算费用约 ${cost:.4f}）"
         )
+
+    def chat_stream(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+        max_retries: int = 3,
+    ) -> Any:
+        """流式调用：逐 token 打印内容，并重建 tool_calls 返回等价响应。"""
+        last_exc: Exception | None = None
+        for attempt in range(max_retries):
+            try:
+                return self._chat_stream_once(messages, tools)
+            except Exception as exc:  # noqa: BLE001
+                last_exc = exc
+                if attempt < max_retries - 1:
+                    time.sleep(min(2 ** attempt, 8))
+        raise LLMError(f"LLM 流式调用失败（已重试 {max_retries} 次）：{last_exc}") from last_exc
+
+    def _chat_stream_once(
+        self, messages: list[dict[str, Any]], tools: list[dict[str, Any]] | None
+    ) -> Any:
+        kwargs: dict[str, Any] = {"model": self._config.model, "messages": messages, "stream": True}
+        if tools:
+            kwargs["tools"] = tools
+        stream = self._client.chat.completions.create(**kwargs)
+
+        content_parts: list[str] = []
+        tool_buf: dict[int, dict[str, str]] = {}
+        usage: Any = None
+        for chunk in stream:
+            if getattr(chunk, "usage", None) is not None:
+                usage = chunk.usage
+            choices = getattr(chunk, "choices", None) or []
+            if not choices:
+                continue
+            delta = getattr(choices[0], "delta", None)
+            if delta is None:
+                continue
+            content = getattr(delta, "content", None)
+            if content:
+                content_parts.append(content)
+                print(content, end="", flush=True)
+            for tc in getattr(delta, "tool_calls", None) or []:
+                idx = getattr(tc, "index", 0)
+                buf = tool_buf.setdefault(idx, {"id": "", "name": "", "arguments": ""})
+                if getattr(tc, "id", None):
+                    buf["id"] = tc.id
+                fn = getattr(tc, "function", None)
+                if fn is not None:
+                    if getattr(fn, "name", None):
+                        buf["name"] = fn.name
+                    if getattr(fn, "arguments", None):
+                        buf["arguments"] += fn.arguments
+
+        if content_parts:
+            print()  # 流式内容结束后补换行
+        response = self._build_streamed_response("".join(content_parts), tool_buf, usage)
+        self._record_usage(response)
+        return response
+
+    def _build_streamed_response(
+        self, content: str, tool_buf: dict[int, dict[str, str]], usage: Any
+    ) -> Any:
+        tool_calls = []
+        for idx in sorted(tool_buf):
+            b = tool_buf[idx]
+            fn = SimpleNamespace(name=b["name"], arguments=b["arguments"])
+            tool_calls.append(SimpleNamespace(id=b["id"], function=fn))
+        msg = SimpleNamespace(content=content, tool_calls=tool_calls or None)
+        choice = SimpleNamespace(message=msg)
+        return SimpleNamespace(choices=[choice], usage=usage)

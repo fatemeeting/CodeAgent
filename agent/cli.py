@@ -25,6 +25,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--usage", action="store_true", help="运行后输出 token 用量与估算费用")
     parser.add_argument("--reflect", action="store_true", help="最终答复前注入自检（reflection）")
     parser.add_argument("--suggest", action="store_true", help="任务完成后推荐后续问题（猜你想问）")
+    parser.add_argument("--stream", action="store_true", help="最终答复流式输出")
     return parser
 
 
@@ -36,6 +37,7 @@ def main(argv: list[str] | None = None) -> int:
         or args.max_iterations is not None
         or args.max_context_tokens is not None
         or args.reflect
+        or args.stream
     ):
         config = replace(
             config,
@@ -49,12 +51,14 @@ def main(argv: list[str] | None = None) -> int:
                 else config.max_context_tokens
             ),
             reflect=args.reflect or config.reflect,
+            stream=args.stream or config.stream,
         )
     if args.task is None:
         return repl(config, workdir=args.workdir or ".")
     client = LLMClient(config)
     result = run(config, args.task, workdir=args.workdir or ".", client=client)
-    print(result)
+    if not config.stream:
+        print(result)
     if args.suggest:
         print("\n你可能还想问：")
         print(suggest_followups(client, args.task))

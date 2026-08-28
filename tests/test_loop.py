@@ -128,6 +128,23 @@ def test_run_reflect_finds_issue_then_fixes(tmp_path):
     assert client.chat.call_count == 3
 
 
+def test_run_stream_uses_chat_stream():
+    client = mock.Mock()
+    client.chat_stream.return_value = _response(content="完成")
+    cfg = Config(
+        api_key="k",
+        base_url="https://example.com",
+        model="deepseek-chat",
+        max_iterations=5,
+        stream=True,
+    )
+    with mock.patch("agent.loop.LLMClient", return_value=client):
+        out = run(cfg, "任务", workdir=".")
+    assert out == "完成"
+    client.chat_stream.assert_called_once()
+    client.chat.assert_not_called()
+
+
 def test_run_logs_tool_calls(capsys, tmp_path):
     responses = [
         _response(content=None, tool_calls=[_tool_call()]),
