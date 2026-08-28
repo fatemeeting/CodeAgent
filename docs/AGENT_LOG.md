@@ -179,4 +179,20 @@
 - **检查证据**：
   - README.txt 汉字数（脚本统计）
   - 提交历史：阶段 0–6 完整
+- **人工放行决定**：通过
+
+## 迭代 2 · 切片 2.1：多轮 REPL
+
+- **时间**：2026-08-28
+- **给 Agent 的任务**：实现交互式多轮会话（REPL），跨轮保留对话历史
+- **Agent 修改了什么**：
+  - `agent/loop.py`：重构出 `run_turn`（原地更新历史），`run` 复用（单次任务不回归）
+  - `agent/repl.py`：新增 `interpret`（命令解析）+ `repl`（交互循环），命令 /help /quit /clear /history
+  - `agent/cli.py`：`task` 改为可选（`nargs="?"`），无参→进入 REPL
+  - `tests/test_repl.py`（4 用例）
+  - 更新 `SPEC.md`（迭代 2 范围）、`docs/context-pack.md`、`docs/gate-checklist.md`
+- **检查证据**：
+  - `pytest -q` → **37 passed**（33 旧 + 4 repl）
+  - 真实多轮冒烟：第 1 轮创建 note.txt(123)，第 2 轮「把刚才…改成 456」→ 模型理解「刚才」（回复「内容已从 123 改为 456」），note.txt 最终内容 456
+  - 单次任务模式未回归（原 loop 测试全绿）
 - **人工放行决定**：（待用户确认：通过 / 重试 / 降级 / 停止）

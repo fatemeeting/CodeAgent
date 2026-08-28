@@ -69,4 +69,13 @@ coding-agent/
 ├── agent/                # 源码（阶段 1 起）
 ├── tests/                # 单元测试（mock LLM，免 key）
 └── docs/                 # 契约工作文件 + prompts/
+
+## 7. 迭代 2（增量：多轮会话 + 持久化）
+
+在 MVP 基础上增量：
+
+1. **交互式多轮会话（REPL）**：无任务参数启动进入交互模式，连续输入任务，agent 跨轮保留对话历史（复用 token 截断）。命令：`/help` `/quit` `/clear` `/history`。
+2. **会话持久化**：`--save <path>` / `--load <path>`（及 REPL `/save` `/load`），消息历史序列化为 JSON，跨进程恢复。
+
+迭代 2 仍不做：流式输出、多 provider、任务规划、Web UI、命令沙箱。
 ```

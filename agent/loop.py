@@ -53,22 +53,24 @@ def _assistant_message(parsed: Any) -> dict[str, Any]:
     return msg
 
 
-def run(config: Config, task: str, workdir: str = ".") -> str:
-    client = LLMClient(config)
-    messages: list[dict[str, Any]] = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": task},
-    ]
-    tools = tool_schemas()
-
+def run_turn(
+    client: LLMClient,
+    config: Config,
+    messages: list[dict[str, Any]],
+    tools: list[dict[str, Any]],
+    workdir: str,
+) -> str:
+    """在给定历史 messages 上执行一轮工具循环；原地更新 messages，返回最终文本。"""
     for step in range(1, config.max_iterations + 1):
-        messages = truncate_history(messages, config.max_context_tokens)
+        messages[:] = truncate_history(messages, config.max_context_tokens)
         response = client.chat(messages, tools=tools)
         parsed = parse_response(response)
 
         # 终止条件 1：模型未请求工具，视为最终答复
         if not parsed.tool_calls:
-            return parsed.content or "（模型未返回文本回复）"
+            final = parsed.content or "（模型未返回文本回复）"
+            messages.append({"role": "assistant", "content": final})
+            return final
 
         messages.append(_assistant_message(parsed))
         for tc in parsed.tool_calls:
@@ -84,3 +86,13 @@ def run(config: Config, task: str, workdir: str = ".") -> str:
 
     # 终止条件 2：达到最大迭代上限
     return f"（达到最大迭代次数 {config.max_iterations}，任务未完成）"
+
+
+def run(config: Config, task: str, workdir: str = ".") -> str:
+    """单次任务：构造 system + user(task)，跑一轮工具循环。"""
+    client = LLMClient(config)
+    messages: list[dict[str, Any]] = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": task},
+    ]
+    return run_turn(client, config, messages, tool_schemas(), workdir)

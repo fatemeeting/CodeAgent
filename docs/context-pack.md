@@ -1,28 +1,28 @@
 # context-pack.md — 当前阶段上下文包
 
-> 当前阶段：**阶段 6（提交物）**
+> 当前阶段：**迭代 2 · 切片 2.1（多轮 REPL）**
 
 ## 当前阶段目标
 
-产出三项提交物：README.txt（≤1000 汉字）、演示视频脚本（2 分钟内）、推送到公开仓库并触发 CI。
+实现交互式多轮会话：无任务参数启动进入 REPL，连续输入任务，跨轮保留对话历史（复用 token 截断与 D1 过程打印）。命令 `/help` `/quit` `/clear` `/history`。单次任务模式 `python -m agent "任务"` 不回归。
 
 ## 必须读
 
-- `requirement_doc/requierment_extracted.txt`（提交物要求）
-- `SPEC.md`（阶段 6）
-- `CHECKLIST.md`（F 项）
-- `docs/context-snapshot.md`（阶段 5 已完成事实）
+- `SPEC.md`（迭代 2 范围）
+- `agent/loop.py`（`run` 主循环，需重构出 `run_turn`）
+- `agent/context.py`（`truncate_history`）
+- `docs/context-snapshot.md`
 
 ## 可读（按需）
 
-- `agent/loop.py`（D1 过程打印，用于视频演示）
+- `agent/cli.py`（入口）
 
 ## 不得读 / 不得改
 
 - `.env`（真实凭据）
-- 已推送的 git 历史（不得改写）
+- 已放行代码（除非必要最小重构）
 
 ## 输出要求
 
-- 产出：`README.txt`、`docs/video-script.md`
-- 验收：README ≤1000 汉字；视频脚本 ≤2 分钟；push 后 CI 绿灯
+- 产出：`agent/repl.py`、重构 `agent/loop.py`（`run_turn`）、`agent/cli.py`（无参→REPL）、`tests/test_repl.py`
+- 验收：`pytest -q` 全绿；多轮真实冒烟跨轮记住上下文
