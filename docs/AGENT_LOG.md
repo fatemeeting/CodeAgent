@@ -86,4 +86,21 @@
   - 提交树校验：`.env` / `.venv` 未被跟踪
   - gate_check 直测 exit 0；密钥正则命中真实 key、不误伤占位符；commit_msg 合法→0 / 非法→1
 - **风险备注**：本沙箱限制了 Git Bash 的共享内存（`sh.exe CreateFileMapping error 5`），shell 包装的钩子在此沙箱内无法端到端运行，但 Python 逻辑已直测通过；在正常机器与 GitHub Actions 上钩子可正常生效
+- **人工放行决定**：通过
+
+## 阶段 3：闭环循环
+
+- **时间**：2026-08-28
+- **给 Agent 的任务**：实现完整主循环（解析 / 工具回填 / 终止条件 / 错误处理），mock 单测 + 真实端到端冒烟
+- **Agent 修改了什么**：
+  - `agent/parser.py`：`parse_response` 分流文本与 tool_calls；`_parse_arguments` 防御式 JSON 解析（非法 JSON 回填 `_error`）
+  - `agent/loop.py`：完整循环——无 tool_calls 即终止返回；有则重建 assistant/tool 消息并回填；`--max-iterations` 上限；工具异常回填为观测；观测截断（4000 字符）
+  - `agent/cli.py`：新增 `--workdir`
+  - `tests/test_parser.py`（4 用例）、`tests/test_loop.py`（4 用例）
+  - 更新 `docs/context-pack.md`、`docs/gate-checklist.md`
+- **检查证据**：
+  - `pytest -q` → **25 passed**（17 旧 + 4 parser + 4 loop）
+  - 真实端到端：`python -m agent "创建 hello.py 并运行" --workdir $TEMP\agent-smoke` → 生成 hello.py、运行输出 `Hello from agent`、EXIT=0
+  - 独立核验：hello.py 内容 `print('Hello from agent')`，亲自运行输出 `Hello from agent`
+- **风险处置**：无
 - **人工放行决定**：（待用户确认：通过 / 重试 / 降级 / 停止）

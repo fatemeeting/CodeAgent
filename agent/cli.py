@@ -17,6 +17,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("task", help="交给 agent 的编程任务（自然语言）")
     parser.add_argument("--model", help="覆盖模型名（默认 DEEPSEEK_MODEL / deepseek-chat）")
     parser.add_argument("--max-iterations", type=int, help="工具循环最大迭代次数")
+    parser.add_argument("--workdir", help="工具执行的工作目录（默认当前目录）")
     return parser
 
 
@@ -31,5 +32,5 @@ def main(argv: list[str] | None = None) -> int:
                 args.max_iterations if args.max_iterations is not None else config.max_iterations
             ),
         )
-    print(run(config, args.task))
+    print(run(config, args.task, workdir=args.workdir or "."))
     return 0
