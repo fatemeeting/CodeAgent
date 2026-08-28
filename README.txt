@@ -23,8 +23,10 @@ python -m agent "创建 hello.py 打印 Hello 并运行"
 - 原生 function calling（OpenAI 兼容接口），仅依赖 openai 客户端库
 - 自研 token 估算与上下文截断，长任务不爆上下文
 - token / 费用统计（--usage）
+- 流式输出（--stream）：最终答复逐 token 输出
+- 「猜你想问」（--suggest）：任务完成后推荐后续问题
 - 过程可读：实时打印每步工具调用与结果
-- 46 个单元测试（mock LLM 免 key）+ GitHub Actions CI + pre-commit 密钥扫描
+- 49 个单元测试（mock LLM 免 key）+ GitHub Actions CI + pre-commit 密钥扫描
 
 ## 其它说明
 - 凭据一律通过环境变量或 .env 提供，绝不入库
