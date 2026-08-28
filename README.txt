@@ -29,7 +29,7 @@ python -m agent "创建 hello.py 打印 Hello 并运行"
 - 任务规划（--plan）：执行前先生成分步计划
 - 并行工具调用：多个独立工具并发执行
 - 危险命令确认（--confirm）：rm / del 等执行前人工确认
-- Web 界面：python -m agent.web（聊天式界面，模仿 DeepSeek Harness：气泡 + 流式 + 工作区先行）
+- Web 界面：python -m agent.web（聊天式界面，模仿 DeepSeek Harness：气泡 + 流式 + 工作区先行 + 原生文件夹选择器）
 - 过程可读：实时打印每步工具调用与结果
 - 57 个单元测试（mock LLM 免 key）+ GitHub Actions CI + pre-commit 密钥扫描
 

@@ -22,6 +22,7 @@
 - 迭代 5 通过：切片 5.1 任务规划（`--plan`）+ 切片 5.2 并行工具调用 + 切片 5.3 人工确认（`--confirm`）；`pytest` 54 passed
 - 迭代 6 通过：切片 6.1 极简 Web 终端（标准库 HTTP）+ 切片 6.2 SSE 流式；`pytest` 57 passed
 - 迭代 6 优化通过：切片 6.3 工作区先行（REPL `/workdir` + Web workdir 参数）+ 切片 6.4 聊天式界面（模仿 DSH）；`pytest` 60 passed
+- 迭代 6 切片 6.5 通过：原生文件夹选择器（tkinter `askdirectory` + `/pick-workspace`）；`pytest` 61 passed
 - CI 修复与工作流：跨平台测试修复（`del`→`os.remove`）+ 堵 `os.remove` 绕过；推送工作流确立（GIT_SSH + Actions 轮询）
 
 ## 未完成 / 未决
