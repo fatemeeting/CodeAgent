@@ -1,22 +1,18 @@
 # context-pack.md — 当前阶段上下文包
 
-> 当前阶段：**迭代 6 · 切片 6.4（聊天式 Web 界面，模仿 DeepSeek Harness）**
+> 当前阶段：**迭代 6 优化 · 完成（工作区先行 + 聊天式 Web 界面）**
 
-## 当前阶段目标
+## 本阶段已完成
 
-把表单页改为对话式布局：消息气泡（用户右 / agent 左）、顶部工作区输入（先指定）、底部输入框（Enter 发送）、SSE 流式渲染、工具步骤着色（蓝=调用 / 绿=观测）。
+- 切片 6.3 工作区先行：REPL `/workdir`（提示符显示）+ Web workdir 参数校验
+- 切片 6.4 聊天式界面：气泡 + 流式 + 工具着色，模仿 DeepSeek Harness
 
-## 必须读
+## 下一阶段（迭代 7）
 
-- `SPEC.md`（迭代 6 增补 4）
-- `agent/web.py`（`INDEX_HTML`）
-- `docs/context-snapshot.md`
+- 候选：命令沙箱（真正隔离，替代模式匹配）/ 多 provider 切换
+- 开工前先写：SPEC 增项 + CHECKLIST 增项 + 本 context-pack，再动代码
 
 ## 不得读 / 不得改
 
 - `.env`（真实凭据）
-
-## 输出要求
-
-- 产出：`agent/web.py`（新 `INDEX_HTML`）
-- 验收：`pytest -q` 全绿；浏览器打开页面可见对话式布局与流式气泡
+- 已放行代码（除非必要最小修改）

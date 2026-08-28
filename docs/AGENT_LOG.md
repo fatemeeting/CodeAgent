@@ -284,3 +284,18 @@
 - **证据**：本地 `pytest` 57 passed；推送后 GitHub Actions `CI` conclusion=**success**（`1b0b5f5`）
 - **工作流确立**（此后每笔提交执行）：提交 → `$env:GIT_SSH="E:\Codes\CodeAgent\.ssh\ssh-github.cmd"; git push origin main` → 轮询 Actions API 状态 → 失败则定位纠错
 - **人工放行决定**：通过
+
+## 迭代 6 优化：工作区先行 + 聊天式界面
+
+- **时间**：2026-08-28
+- **给 Agent 的任务**：① 优化使用方式——先指定工作区，再在指定工作区完成项目；② Web 界面模仿 DeepSeek Harness 的聊天式布局
+- **Agent 修改了什么**：
+  - `agent/repl.py`：`/workdir [路径]`（设置 / 查看 / 校验目录存在），提示符改为 `[工作区] >>`
+  - `agent/web.py`：`/run` `/events` 接受 `workdir` 参数并校验目录存在；`INDEX_HTML` 重写为聊天式（消息气泡、顶部工作区输入、底部输入框 Enter 发送、SSE 流式渲染进气泡、工具调用蓝色 / 观测绿色）
+  - 测试：`tests/test_repl.py`（+2）、`tests/test_web.py`（+1）
+  - 更新 `SPEC.md`（迭代 6 增补 3/4）、`CHECKLIST.md`（L 节）、`README.txt`、`docs/context-pack.md`、`docs/gate-checklist.md`
+- **检查证据**：
+  - `pytest -q` → **60 passed**
+  - REPL 冒烟：`/workdir` 后提示符显示工作区，任务落在指定目录（ws.py 生成于目标目录）
+  - Web 冒烟：页面含 chat/ws/气泡/着色类；SSE 携带 workdir 端到端闭环（工具调用 + 最终答复 + [DONE]）
+- **人工放行决定**：（待用户确认：通过 / 重试 / 降级 / 停止）
