@@ -166,6 +166,51 @@ def test_run_executes_multiple_tool_calls(tmp_path):
     assert tool_ids == ["c1", "c2"]  # 观测按调用顺序回填
 
 
+def _confirm_config(max_iterations=5):
+    return Config(
+        api_key="k",
+        base_url="https://example.com",
+        model="deepseek-chat",
+        max_iterations=max_iterations,
+        confirm_dangerous=True,
+    )
+
+
+def test_run_confirm_dangerous_declined(tmp_path):
+    call = _tool_call("c1", "execute_command", '{"command": "rm -rf x"}')
+    responses = [
+        _response(content=None, tool_calls=[call]),
+        _response(content="好的"),
+    ]
+    client = mock.Mock()
+    client.chat.side_effect = responses
+    with mock.patch("agent.loop.LLMClient", return_value=client), mock.patch(
+        "builtins.input", return_value="n"
+    ):
+        out = run(_confirm_config(), "删除文件", workdir=str(tmp_path))
+    assert out == "好的"
+    second_messages = client.chat.call_args_list[1].args[0]
+    tool_msg = next(m for m in second_messages if m.get("role") == "tool")
+    assert "取消" in tool_msg["content"]
+
+
+def test_run_confirm_dangerous_approved(tmp_path):
+    (tmp_path / "x.txt").write_text("data", encoding="utf-8")
+    call = _tool_call("c1", "execute_command", '{"command": "del x.txt"}')
+    responses = [
+        _response(content=None, tool_calls=[call]),
+        _response(content="完成"),
+    ]
+    client = mock.Mock()
+    client.chat.side_effect = responses
+    with mock.patch("agent.loop.LLMClient", return_value=client), mock.patch(
+        "builtins.input", return_value="y"
+    ):
+        out = run(_confirm_config(), "删除 x.txt", workdir=str(tmp_path))
+    assert out == "完成"
+    assert not (tmp_path / "x.txt").exists()  # 确认后实际执行
+
+
 def test_run_logs_tool_calls(capsys, tmp_path):
     responses = [
         _response(content=None, tool_calls=[_tool_call()]),

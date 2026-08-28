@@ -3,6 +3,7 @@
 import sys
 
 from agent.tools import TOOLS, dispatch, tool_schemas
+from agent.tools.shell_tools import is_dangerous
 
 
 def test_six_tools_registered():
@@ -82,3 +83,11 @@ def test_execute_command_captures_failure(tmp_path):
 def test_dispatch_unknown_tool(tmp_path):
     out = dispatch("no_such_tool", {}, str(tmp_path))
     assert "未知工具" in out
+
+
+def test_is_dangerous():
+    assert is_dangerous("rm -rf x")
+    assert is_dangerous("del file.txt")
+    assert is_dangerous("git push origin main")
+    assert not is_dangerous("echo hello")
+    assert not is_dangerous("python main.py")

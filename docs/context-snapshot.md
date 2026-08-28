@@ -19,12 +19,13 @@
 - 迭代 2 切片 2.2（会话持久化）通过：`save_history`/`load_history` + REPL `/save` `/load`；`pytest` 42 passed
 - 迭代 3 通过：切片 3.1 token/费用统计（`--usage`/`/usage`）+ 切片 3.2 自我反思（`--reflect`）；`pytest` 46 passed
 - 迭代 4 通过：切片 4.1 猜你想问（`--suggest`）+ 切片 4.2 流式输出（`--stream`）；`pytest` 49 passed
+- 迭代 5 通过：切片 5.1 任务规划（`--plan`）+ 切片 5.2 并行工具调用 + 切片 5.3 人工确认（`--confirm`）；`pytest` 54 passed
 
 ## 未完成 / 未决
 
 - 视频录制与 zip 打包（用户自行完成）：README.txt 与视频脚本已就绪
 - push stage 4/5/6 + 迭代 2 到远程触发 CI（若尚未推送）
-- 迭代 5（backlog）：极简 Web 终端 / 多 provider / 命令沙箱
+- 迭代 6（backlog）：极简 Web 终端 / 多 provider 切换 / 命令沙箱（真正隔离，替代模式匹配防护）
 
 ## 不再重复讨论的决定
 

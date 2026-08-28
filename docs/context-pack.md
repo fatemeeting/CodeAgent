@@ -1,22 +1,19 @@
 # context-pack.md — 当前阶段上下文包
 
-> 当前阶段：**迭代 5 · 切片 5.2（并行工具调用）**
+> 当前阶段：**迭代 5 · 完成（任务规划 + 并行工具 + 人工确认）**
 
-## 当前阶段目标
+## 本阶段已完成
 
-模型一次返回多个 tool_calls 时并发执行（API 契约：同批工具相互独立），观测仍按调用顺序回填；单工具不变。
+- 切片 5.1 任务规划：`--plan` 执行前输出分步计划
+- 切片 5.2 并行工具调用：多个 tool_calls 并发执行
+- 切片 5.3 human-in-the-loop：`--confirm` 危险命令人工确认
 
-## 必须读
+## 下一阶段（迭代 6）
 
-- `SPEC.md`（迭代 5 范围）
-- `agent/loop.py`（`run_turn` 工具执行段）
-- `agent/tools/__init__.py`（`dispatch`）
+- 候选：极简 Web 终端 / 多 provider 切换 / 命令沙箱（真正的安全边界，替代模式匹配）
+- 开工前先写：SPEC 增项 + CHECKLIST 增项 + 本 context-pack，再动代码
 
 ## 不得读 / 不得改
 
 - `.env`（真实凭据）
-
-## 输出要求
-
-- 产出：`agent/loop.py`（ThreadPoolExecutor 并行 + 日志顺序）、`tests/test_loop.py`（+1）
-- 验收：`pytest -q` 全绿
+- 已放行代码（除非必要最小修改）

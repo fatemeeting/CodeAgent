@@ -10,6 +10,7 @@ from .context import truncate_history
 from .llm import LLMClient
 from .parser import parse_response
 from .tools import dispatch, tool_schemas
+from .tools.shell_tools import is_dangerous
 
 SYSTEM_PROMPT = (
     "你是一个编程智能体（coding agent）。用户会给你一个编程任务。"
@@ -77,6 +78,15 @@ def _execute_tool_calls(tool_calls: list[Any], workdir: str) -> list[str]:
         return [f.result() for f in futures]
 
 
+def _confirm_dangerous(command: str) -> bool:
+    """人工确认危险命令；非交互（EOF）视为拒绝。"""
+    try:
+        answer = input(f"⚠️ 检测到危险命令：{command}\n是否执行？(y/N) ")
+    except (EOFError, KeyboardInterrupt):
+        return False
+    return answer.strip().lower() == "y"
+
+
 def run_turn(
     client: LLMClient,
     config: Config,
@@ -113,7 +123,25 @@ def run_turn(
         messages.append(_assistant_message(parsed))
         for tc in parsed.tool_calls:
             _log_tool_call(step, tc.name, tc.arguments)
-        observations = _execute_tool_calls(parsed.tool_calls, workdir)
+
+        # human-in-the-loop：危险命令执行前人工确认（拒绝则不执行）
+        refused: dict[int, str] = {}
+        if config.confirm_dangerous:
+            for i, tc in enumerate(parsed.tool_calls):
+                command = str(tc.arguments.get("command", ""))
+                if tc.name == "execute_command" and is_dangerous(command):
+                    if not _confirm_dangerous(command):
+                        refused[i] = f"用户取消了危险命令：{command}"
+
+        executable_indices = [i for i in range(len(parsed.tool_calls)) if i not in refused]
+        executable_calls = [parsed.tool_calls[i] for i in executable_indices]
+        results = _execute_tool_calls(executable_calls, workdir) if executable_calls else []
+        observations: list[str] = [""] * len(parsed.tool_calls)
+        for i, obs in zip(executable_indices, results):
+            observations[i] = obs
+        for i, obs in refused.items():
+            observations[i] = obs
+
         for tc, observation in zip(parsed.tool_calls, observations):
             if len(observation) > MAX_TOOL_TEXT:
                 observation = observation[:MAX_TOOL_TEXT] + "\n...（观测过长已截断）"

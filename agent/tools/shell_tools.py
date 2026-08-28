@@ -3,11 +3,23 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 
 from .base import Tool
 
 MAX_OUTPUT_CHARS = 20_000
+
+DANGEROUS_PATTERNS = [
+    r"\brm\b", r"\bdel\b", r"\brmdir\b", r"\brd\b",
+    r"git\s+push", r"git\s+reset\s+--hard",
+    r"format\s+[a-z]:", r"\bshutdown\b", r"\breboot\b", r"\btaskkill\b",
+]
+
+
+def is_dangerous(command: str) -> bool:
+    """判断命令是否危险（删除 / 破坏性 git / 格式化 / 关机等）。"""
+    return any(re.search(p, command, re.IGNORECASE) for p in DANGEROUS_PATTERNS)
 
 
 def _truncate(s: str, limit: int) -> str:

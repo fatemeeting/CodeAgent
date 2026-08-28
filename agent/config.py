@@ -54,6 +54,7 @@ class Config:
     max_context_tokens: int = 12000  # 上下文 token 预算（自研估算），超出则裁剪历史
     reflect: bool = False  # 最终答复前注入自检（reflection）
     stream: bool = False  # 流式输出最终答复
+    confirm_dangerous: bool = False  # 危险命令执行前人工确认（human-in-the-loop）
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -71,4 +72,6 @@ class Config:
             max_context_tokens=int(os.environ.get("DEEPSEEK_MAX_CONTEXT_TOKENS", "12000")),
             reflect=os.environ.get("DEEPSEEK_REFLECT", "").lower() in ("1", "true", "yes"),
             stream=os.environ.get("DEEPSEEK_STREAM", "").lower() in ("1", "true", "yes"),
+            confirm_dangerous=os.environ.get("DEEPSEEK_CONFIRM_DANGEROUS", "").lower()
+            in ("1", "true", "yes"),
         )

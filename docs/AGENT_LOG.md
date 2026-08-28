@@ -240,4 +240,21 @@
   - `--suggest` 冒烟：输出 3 条后续问题建议
   - `--stream` 冒烟：最终答复流式输出、无重复打印
 - **风险备注**：流式模式下 usage 统计可能不完整（部分网关流式不含 usage），属已知小限制
+- **人工放行决定**：通过
+
+## 迭代 5：任务规划 + 并行工具 + 人工确认
+
+- **时间**：2026-08-28
+- **给 Agent 的任务**：切片 5.1 plan-first；切片 5.2 并行工具调用；切片 5.3 human-in-the-loop
+- **Agent 修改了什么**：
+  - 切片 5.1：`agent/plan.py`（`make_plan` 复用 client 再调一次）+ `agent/cli.py` `--plan`（打印计划并注入执行上下文）
+  - 切片 5.2：`agent/loop.py` `_execute_tool_calls`（ThreadPoolExecutor 并发，观测按调用顺序回填）+ `_safe_dispatch`
+  - 切片 5.3：`agent/tools/shell_tools.py` `is_dangerous`（rm/del/git push/format/shutdown 等）+ `agent/config.py` `confirm_dangerous` + `agent/loop.py` 确认逻辑 + `agent/cli.py` `--confirm`
+  - 测试：`tests/test_plan.py`（+1）、`tests/test_loop.py`（+3）、`tests/test_tools.py`（+1）
+  - 更新 `SPEC.md`（迭代 5）、`CHECKLIST.md`（J 节）、`README.txt`、`docs/context-pack.md`、`docs/gate-checklist.md`
+- **检查证据**：
+  - `pytest -q` → **54 passed**
+  - `--plan` 冒烟：先输出 6 步计划，再按计划执行
+  - `--confirm` 冒烟：`rm t.txt`、`rm -f ...` 均被拦截（非交互 EOF → 安全拒绝）；模型尝试 `python3 -c "os.remove(...)"` 绕过——证明拦截生效
+- **风险备注**：`is_dangerous` 是**模式匹配的提示性防护**，非安全沙箱（模型可用 os.remove 等间接手段绕过）——答辩需明确此边界，真正的隔离需命令沙箱（迭代 6 候选）
 - **人工放行决定**：（待用户确认：通过 / 重试 / 降级 / 停止）

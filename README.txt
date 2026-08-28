@@ -25,8 +25,11 @@ python -m agent "创建 hello.py 打印 Hello 并运行"
 - token / 费用统计（--usage）
 - 流式输出（--stream）：最终答复逐 token 输出
 - 「猜你想问」（--suggest）：任务完成后推荐后续问题
+- 任务规划（--plan）：执行前先生成分步计划
+- 并行工具调用：多个独立工具并发执行
+- 危险命令确认（--confirm）：rm / del 等执行前人工确认
 - 过程可读：实时打印每步工具调用与结果
-- 49 个单元测试（mock LLM 免 key）+ GitHub Actions CI + pre-commit 密钥扫描
+- 54 个单元测试（mock LLM 免 key）+ GitHub Actions CI + pre-commit 密钥扫描
 
 ## 其它说明
 - 凭据一律通过环境变量或 .env 提供，绝不入库
