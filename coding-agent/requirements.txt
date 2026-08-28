@@ -1,2 +1,2 @@
-# 运行时依赖（生产必需，SPEC 技术约束：仅 openai 客户端库）
-openai>=1.40.0
+# Runtime dependencies (only the openai client library, per SPEC)
+openai==3.3.1
