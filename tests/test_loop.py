@@ -195,8 +195,13 @@ def test_run_confirm_dangerous_declined(tmp_path):
 
 
 def test_run_confirm_dangerous_approved(tmp_path):
+    import json as _json
+    import sys as _sys
+
     (tmp_path / "x.txt").write_text("data", encoding="utf-8")
-    call = _tool_call("c1", "execute_command", '{"command": "del x.txt"}')
+    # 跨平台删除命令（Windows/ubuntu 均可用），且命中 os.remove 危险模式
+    cmd = f'"{_sys.executable}" -c "import os; os.remove(\'x.txt\')"'
+    call = _tool_call("c1", "execute_command", _json.dumps({"command": cmd}))
     responses = [
         _response(content=None, tool_calls=[call]),
         _response(content="完成"),

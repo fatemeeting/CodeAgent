@@ -89,5 +89,6 @@ def test_is_dangerous():
     assert is_dangerous("rm -rf x")
     assert is_dangerous("del file.txt")
     assert is_dangerous("git push origin main")
+    assert is_dangerous('python -c "import os; os.remove(\'x\')"')  # 堵绕过
     assert not is_dangerous("echo hello")
     assert not is_dangerous("python main.py")

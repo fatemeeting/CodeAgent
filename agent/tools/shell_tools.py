@@ -12,6 +12,7 @@ MAX_OUTPUT_CHARS = 20_000
 
 DANGEROUS_PATTERNS = [
     r"\brm\b", r"\bdel\b", r"\brmdir\b", r"\brd\b",
+    r"os\.remove", r"os\.rmdir", r"shutil\.rmtree",  # python 间接删除（堵绕过）
     r"git\s+push", r"git\s+reset\s+--hard",
     r"format\s+[a-z]:", r"\bshutdown\b", r"\breboot\b", r"\btaskkill\b",
 ]
