@@ -1,6 +1,8 @@
-"""context.py 单元测试：token 估算与历史裁剪。"""
+"""context.py 单元测试：token 估算与历史裁剪、持久化。"""
 
-from agent.context import estimate_tokens, truncate_history
+import pytest
+
+from agent.context import estimate_tokens, load_history, save_history, truncate_history
 
 
 def test_estimate_tokens_empty():
@@ -59,3 +61,26 @@ def test_truncate_drops_leading_orphan_tool():
 
 def test_truncate_empty():
     assert truncate_history([], 100) == []
+
+
+def test_save_load_history_roundtrip(tmp_path):
+    msgs = [
+        {"role": "system", "content": "s"},
+        {"role": "user", "content": "任务"},
+        {"role": "assistant", "content": "答复"},
+    ]
+    p = tmp_path / "history.json"
+    save_history(msgs, str(p))
+    assert load_history(str(p)) == msgs
+
+
+def test_load_history_missing_file(tmp_path):
+    with pytest.raises(FileNotFoundError):
+        load_history(str(tmp_path / "nope.json"))
+
+
+def test_load_history_bad_format(tmp_path):
+    p = tmp_path / "bad.json"
+    p.write_text("{}", encoding="utf-8")  # 非列表
+    with pytest.raises(ValueError):
+        load_history(str(p))

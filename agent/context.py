@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
 
 
@@ -69,3 +71,18 @@ def truncate_history(messages: list[dict[str, Any]], max_tokens: int) -> list[di
         tail.pop(0)
 
     return head + tail
+
+
+def save_history(messages: list[dict[str, Any]], path: str) -> None:
+    """把消息历史序列化为 JSON 保存到文件（仅消息，不含凭据）。"""
+    Path(path).write_text(
+        json.dumps(messages, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+
+def load_history(path: str) -> list[dict[str, Any]]:
+    """从 JSON 文件加载消息历史。"""
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(data, list):
+        raise ValueError(f"历史文件格式错误（应为列表）：{path}")
+    return data

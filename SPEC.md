@@ -75,7 +75,7 @@ coding-agent/
 在 MVP 基础上增量：
 
 1. **交互式多轮会话（REPL）**：无任务参数启动进入交互模式，连续输入任务，agent 跨轮保留对话历史（复用 token 截断）。命令：`/help` `/quit` `/clear` `/history`。
-2. **会话持久化**：`--save <path>` / `--load <path>`（及 REPL `/save` `/load`），消息历史序列化为 JSON，跨进程恢复。
+2. **会话持久化**：REPL `/save [路径]` / `/load [路径]` 命令（`context.py` 的 `save_history` / `load_history`），消息历史序列化为 JSON，跨进程恢复。
 
 迭代 2 仍不做：流式输出、多 provider、任务规划、Web UI、命令沙箱。
 ```

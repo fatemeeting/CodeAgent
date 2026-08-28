@@ -5,11 +5,12 @@ from __future__ import annotations
 from typing import Any
 
 from .config import Config
+from .context import load_history, save_history
 from .llm import LLMClient
 from .loop import SYSTEM_PROMPT, run_turn
 from .tools import tool_schemas
 
-HELP = "命令：/help 查看帮助 | /quit 退出 | /clear 清空历史 | /history 查看消息数"
+HELP = "命令：/help 查看帮助 | /quit 退出 | /clear 清空历史 | /history 查看消息数 | /save [路径] | /load [路径]"
 
 
 def interpret(line: str) -> tuple[str, str | None]:
@@ -25,6 +26,10 @@ def interpret(line: str) -> tuple[str, str | None]:
         return ("clear", None)
     if s == "/history":
         return ("history", None)
+    if s.startswith("/save"):
+        return ("save", s[len("/save") :].strip() or "history.json")
+    if s.startswith("/load"):
+        return ("load", s[len("/load") :].strip() or "history.json")
     return ("task", s)
 
 
@@ -54,6 +59,18 @@ def repl(config: Config, workdir: str = ".") -> int:
             continue
         if action == "history":
             print(f"当前对话历史 {len(messages)} 条消息。")
+            continue
+        if action == "save":
+            save_history(messages, payload)
+            print(f"已保存对话历史到 {payload}（{len(messages)} 条消息）。")
+            continue
+        if action == "load":
+            try:
+                messages[:] = load_history(payload)
+            except (FileNotFoundError, ValueError) as exc:
+                print(f"加载失败：{exc}")
+                continue
+            print(f"已加载对话历史（{len(messages)} 条消息）。")
             continue
         # action == "task"
         messages.append({"role": "user", "content": payload})

@@ -15,13 +15,14 @@
 - D1 已补：主循环打印每步工具调用与结果摘要（stdout），`pytest` 33 passed
 - CHECKLIST：A–F 全部通过（31 项）
 - 阶段 6 提交物：README.txt（272 汉字）+ 视频脚本 docs/video-script.md
-- 迭代 2 切片 2.1（多轮 REPL）通过：无参进入交互模式，跨轮记住上下文；`pytest` 37 passed
+- 迭代 2 切片 2.1（多轮 REPL）通过：无参进入交互模式，跨轮记住上下文
+- 迭代 2 切片 2.2（会话持久化）通过：`save_history`/`load_history` + REPL `/save` `/load`；`pytest` 42 passed
 
 ## 未完成 / 未决
 
 - 视频录制与 zip 打包（用户自行完成）：README.txt 与视频脚本已就绪
 - push stage 4/5/6 + 迭代 2 到远程触发 CI（若尚未推送）
-- 迭代 2 切片 2.2（会话持久化）：save/load 历史 JSON
+- 迭代 3（backlog）：流式输出 / 自我反思 / token 费用统计 / 猜你想问
 
 ## 不再重复讨论的决定
 

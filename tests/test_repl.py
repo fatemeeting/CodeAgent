@@ -56,3 +56,21 @@ def test_repl_history_and_clear(capsys):
         repl(_config(), workdir=".")
     out = capsys.readouterr().out
     assert "1 条消息" in out  # 初始仅 system
+
+
+def test_interpret_save_load():
+    assert interpret("/save") == ("save", "history.json")
+    assert interpret("/save foo.json") == ("save", "foo.json")
+    assert interpret("/load") == ("load", "history.json")
+    assert interpret("/load bar.json") == ("load", "bar.json")
+
+
+def test_repl_save_writes_file(tmp_path):
+    import json
+
+    path = str(tmp_path / "h.json")
+    with mock.patch("builtins.input", side_effect=[f"/save {path}", "/quit"]):
+        repl(_config(), workdir=".")
+    data = json.loads(open(path, encoding="utf-8").read())
+    assert len(data) == 1
+    assert data[0]["role"] == "system"
