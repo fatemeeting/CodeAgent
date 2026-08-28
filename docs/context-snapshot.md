@@ -9,6 +9,8 @@
 - 阶段 2 工具层通过：六个工具 + JSON Schema + 注册表 + dispatch
 - CI/CD 就绪：独立 git 仓库 + pre-commit/commit-msg 钩子 + GitHub Actions CI
 - 阶段 3 闭环循环通过：parser（分流 + 防御式解析）+ 完整 loop（终止条件 + 错误处理）+ `--workdir`；`pytest` 25 passed；真实端到端「创建 hello.py 并运行」闭环
+- 远程仓库已连接并公开：`git@github.com:fatemeeting/CodeAgent.git`（SSH 认证 `fatemeeting`）；main 已推为正确根目录结构（stages 0-3 + CI/CD），旧嵌套历史备份在 `backup/original-nested`
+- **CI 已验证通过**：GitHub Actions `CI` conclusion=success（compileall + pytest 25 用例），`.github/workflows/ci.yml` 位于 main 根目录
 
 ## 未完成 / 未决
 
