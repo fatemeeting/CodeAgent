@@ -1,22 +1,22 @@
-# gate-checklist.md — 阶段 0 放行清单
+# gate-checklist.md — 阶段 1 放行清单
 
-> 当前阶段：阶段 0（契约先行）。放行决定：通过 / 重试 / 降级 / 停止。
+> 当前阶段：阶段 1（骨架冒烟）。放行决定：通过 / 重试 / 降级 / 停止。
 
 ## 必过项
 
-- [ ] SPEC.md 覆盖：用户 / 目标 / 范围 / 非目标 / 技术约束 / 阶段划分
-- [ ] CHECKLIST.md 每项可观察或可执行，含功能 / 工程 / 安全 / 体验 / 解释 / 退出
-- [ ] AGENTS.md 含：目标 / 优先阅读 / 检查命令 / 禁止事项与安全边界
-- [ ] `.gitignore` 忽略 `.env`、`__pycache__` 等
-- [ ] `.env.example` 仅占位符，无真实 key
-- [ ] `requirements.txt` 仅 `openai`
+- [x] `python -m agent --help` 正常显示用法并以 0 退出（CHECKLIST A1）
+- [x] `python -m agent "你好"` 返回模型文本回复（CHECKLIST A2）
+- [x] `config.py` 自研 `.env` 加载，不引入第三方 dotenv 依赖
+- [x] `llm.py` 使用 `OpenAI(api_key, base_url)` + 自研重试，失败抛 `LLMError`
+- [x] 无任何 agent 框架 import；`requirements.txt` 仍仅 `openai`
 
 ## 证据位置
 
-- 文件本体：`SPEC.md`、`CHECKLIST.md`、`AGENTS.md`、`.gitignore`、`.env.example`、`requirements.txt`
+- 命令输出：见 `docs/AGENT_LOG.md` 阶段 1 条目
+- 代码：`agent/config.py`、`agent/llm.py`、`agent/loop.py`、`agent/cli.py`、`agent/__main__.py`
 
 ## 退出决定
 
-- 通过 → 进入阶段 1
+- 通过 → 进入阶段 2（工具层）
 - 重试 → 补齐缺失项后复查
 - 停止 → 记录原因

@@ -1,27 +1,29 @@
 # context-pack.md — 当前阶段上下文包
 
-> 当前阶段：**阶段 0（契约先行）**
+> 当前阶段：**阶段 1（骨架冒烟）**
 
 ## 当前阶段目标
 
-产出 SPEC / CHECKLIST / AGENTS 与工程基础文件，为后续阶段建立可验收基线；不提前写业务代码。
+搭建 `agent/` 包骨架，实现 `config.py`（自研 .env 加载）+ `llm.py`（DeepSeek 封装 + 自研重试）+ 最小 `loop.py`（发消息→打印回复，无工具），跑通「能启动、能访问 API、无基础错误」。
 
 ## 必须读
 
-- `requirement_doc/推免考核题目学生版.pdf`（已抽取文本至 `requirement_doc/requierment_extracted.txt`）
-- 本目录 `SPEC.md`、`CHECKLIST.md`、`AGENTS.md`
+- `SPEC.md`（阶段划分与技术约束）
+- `CHECKLIST.md`（A1 / A2 项）
+- `AGENTS.md`（禁止事项与检查命令）
+- `docs/AGENT_LOG.md`（阶段 0 已完成事实）
 
 ## 可读（按需）
 
-- `docs/AGENT_LOG.md`（历史证据）
-- `docs/context-snapshot.md`（已决事项）
+- `docs/context-snapshot.md`
+- `.env.example`（变量名参考，不读真实 `.env`）
 
 ## 不得读 / 不得改
 
-- `.env` 及任何真实凭据文件
-- 已推送的 Git 历史（不得改写）
+- `.env`（真实凭据，仅由 `config.py` 运行时加载，人工不得查看其值）
+- 已推送的 Git 历史
 
 ## 输出要求
 
-- 只产出阶段 0 约定的文件，不提前写代码
-- 每个产出文件说明其用途与验收方式
+- 只产出阶段 1 约定文件：`agent/` 包（`__init__` / `config` / `llm` / `loop` / `cli` / `__main__`）
+- 完成后给出可观察证据：`python -m agent --help` 与真实「你好」冒烟输出
