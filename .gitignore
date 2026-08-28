@@ -23,3 +23,10 @@ Thumbs.db
 dist/
 build/
 *.log
+
+# 本地开发环境与备份（仅本机存在，绝非项目交付物）
+.ssh/
+.dsh/
+.github_known_hosts
+requirement_doc/
+coding-agent.old/
