@@ -1,0 +1,25 @@
+# 凭据与本地配置（绝不入库）
+.env
+*.env
+.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 构建与临时产物
+dist/
+build/
+*.log

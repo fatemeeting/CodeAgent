@@ -1,0 +1,3 @@
+# Dev/test dependencies (includes runtime deps; not shipped with deliverable)
+-r requirements.txt
+pytest==9.1.1

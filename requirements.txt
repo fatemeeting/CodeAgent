@@ -1,0 +1,2 @@
+# Runtime dependencies (only the openai client library, per SPEC)
+openai==3.3.1
