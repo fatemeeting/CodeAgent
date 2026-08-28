@@ -1,18 +1,23 @@
 # context-pack.md — 当前阶段上下文包
 
-> 当前阶段：**迭代 2 · 完成（多轮 REPL + 会话持久化）**
+> 当前阶段：**迭代 3 · 切片 3.1（token / 费用统计）**
 
-## 本阶段已完成
+## 当前阶段目标
 
-- 切片 2.1 多轮 REPL：无参进入交互模式，跨轮保留历史，命令 `/help` `/quit` `/clear` `/history`
-- 切片 2.2 会话持久化：`/save [路径]` `/load [路径]`，`context.py` 的 `save_history` / `load_history`
+`LLMClient` 累计 prompt / completion tokens；单次任务 `--usage`、REPL `/usage` 输出用量与估算费用（DeepSeek 价格常量，标注「估算」）。
 
-## 下一阶段（迭代 3）
+## 必须读
 
-- 候选：自我反思（reflection）/ token 费用统计 / 流式输出 / 「猜你想问」
-- 开工前先写：SPEC 增项 + CHECKLIST 增项 + 本 context-pack，再动代码
+- `SPEC.md`（迭代 3 范围）
+- `agent/llm.py`（需加累计与 summary）
+- `agent/loop.py`（`run` 需支持复用 client）
+- `docs/context-snapshot.md`
 
 ## 不得读 / 不得改
 
 - `.env`（真实凭据）
-- 已放行代码（除非必要最小修改）
+
+## 输出要求
+
+- 产出：`agent/llm.py`（usage 累计）、`agent/loop.py`（run 复用 client）、`agent/cli.py`（`--usage`）、`agent/repl.py`（`/usage`）、`tests/test_llm.py`（+1）
+- 验收：`pytest -q` 全绿

@@ -88,9 +88,15 @@ def run_turn(
     return f"（达到最大迭代次数 {config.max_iterations}，任务未完成）"
 
 
-def run(config: Config, task: str, workdir: str = ".") -> str:
-    """单次任务：构造 system + user(task)，跑一轮工具循环。"""
-    client = LLMClient(config)
+def run(
+    config: Config,
+    task: str,
+    workdir: str = ".",
+    client: LLMClient | None = None,
+) -> str:
+    """单次任务：构造 system + user(task)，跑一轮工具循环。可复用传入的 client。"""
+    if client is None:
+        client = LLMClient(config)
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": task},

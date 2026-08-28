@@ -46,3 +46,19 @@ def test_chat_succeeds_after_one_retry():
         resp = client.chat([{"role": "user", "content": "x"}], max_retries=3)
     assert resp.choices[0].message.content == "ok"
     assert m.call_count == 2
+
+
+def test_chat_records_usage():
+    client = LLMClient(_config())
+    usage = mock.Mock(prompt_tokens=100, completion_tokens=50)
+    fake_resp = mock.Mock(
+        choices=[mock.Mock(message=mock.Mock(content="hi"))], usage=usage
+    )
+    with mock.patch.object(client._client.chat.completions, "create", return_value=fake_resp):
+        client.chat([{"role": "user", "content": "x"}])
+    assert client.usage_summary() == {
+        "prompt_tokens": 100,
+        "completion_tokens": 50,
+        "total_tokens": 150,
+    }
+    assert "100" in client.usage_summary_text()

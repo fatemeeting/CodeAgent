@@ -31,6 +31,7 @@ def test_interpret_commands():
     assert interpret("/help") == ("help", None)
     assert interpret("/clear") == ("clear", None)
     assert interpret("/history") == ("history", None)
+    assert interpret("/usage") == ("usage", None)
     assert interpret("创建文件") == ("task", "创建文件")
 
 
@@ -74,3 +75,15 @@ def test_repl_save_writes_file(tmp_path):
     data = json.loads(open(path, encoding="utf-8").read())
     assert len(data) == 1
     assert data[0]["role"] == "system"
+
+
+def test_repl_usage(capsys):
+    client = mock.Mock()
+    client.usage_summary_text.return_value = (
+        "token 用量：prompt 100 / completion 50 / 总计 150（估算费用约 $0.0001）"
+    )
+    with mock.patch("builtins.input", side_effect=["/usage", "/quit"]), mock.patch(
+        "agent.repl.LLMClient", return_value=client
+    ):
+        repl(_config(), workdir=".")
+    assert "prompt 100" in capsys.readouterr().out

@@ -78,4 +78,9 @@ coding-agent/
 2. **会话持久化**：REPL `/save [路径]` / `/load [路径]` 命令（`context.py` 的 `save_history` / `load_history`），消息历史序列化为 JSON，跨进程恢复。
 
 迭代 2 仍不做：流式输出、多 provider、任务规划、Web UI、命令沙箱。
+
+## 8. 迭代 3（增量：token 统计 + 自我反思）
+
+1. **token / 费用统计**：`LLMClient` 累计 prompt / completion tokens；`--usage` 或 REPL `/usage` 输出用量与估算费用（价格常量标注估算）。
+2. **自我反思（reflection）**：模型给出最终答复后注入自检提示，发现问题则继续调用工具修正，确认完成才返回（`--reflect` 开启）。
 ```

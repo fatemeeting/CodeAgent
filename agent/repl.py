@@ -10,7 +10,7 @@ from .llm import LLMClient
 from .loop import SYSTEM_PROMPT, run_turn
 from .tools import tool_schemas
 
-HELP = "命令：/help 查看帮助 | /quit 退出 | /clear 清空历史 | /history 查看消息数 | /save [路径] | /load [路径]"
+HELP = "命令：/help 查看帮助 | /quit 退出 | /clear 清空历史 | /history 查看消息数 | /save [路径] | /load [路径] | /usage 查看用量"
 
 
 def interpret(line: str) -> tuple[str, str | None]:
@@ -30,6 +30,8 @@ def interpret(line: str) -> tuple[str, str | None]:
         return ("save", s[len("/save") :].strip() or "history.json")
     if s.startswith("/load"):
         return ("load", s[len("/load") :].strip() or "history.json")
+    if s == "/usage":
+        return ("usage", None)
     return ("task", s)
 
 
@@ -71,6 +73,9 @@ def repl(config: Config, workdir: str = ".") -> int:
                 print(f"加载失败：{exc}")
                 continue
             print(f"已加载对话历史（{len(messages)} 条消息）。")
+            continue
+        if action == "usage":
+            print(client.usage_summary_text())
             continue
         # action == "task"
         messages.append({"role": "user", "content": payload})

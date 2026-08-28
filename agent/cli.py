@@ -6,6 +6,7 @@ import argparse
 from dataclasses import replace
 
 from .config import Config
+from .llm import LLMClient
 from .loop import run
 from .repl import repl
 
@@ -20,6 +21,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-iterations", type=int, help="工具循环最大迭代次数")
     parser.add_argument("--workdir", help="工具执行的工作目录（默认当前目录）")
     parser.add_argument("--max-context-tokens", type=int, help="上下文 token 预算（超出则裁剪历史）")
+    parser.add_argument("--usage", action="store_true", help="运行后输出 token 用量与估算费用")
     return parser
 
 
@@ -45,5 +47,9 @@ def main(argv: list[str] | None = None) -> int:
         )
     if args.task is None:
         return repl(config, workdir=args.workdir or ".")
-    print(run(config, args.task, workdir=args.workdir or "."))
+    client = LLMClient(config)
+    result = run(config, args.task, workdir=args.workdir or ".", client=client)
+    print(result)
+    if args.usage:
+        print(client.usage_summary_text())
     return 0
