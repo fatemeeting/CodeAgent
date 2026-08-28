@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from .config import Config
@@ -10,7 +11,7 @@ from .llm import LLMClient
 from .loop import SYSTEM_PROMPT, run_turn
 from .tools import tool_schemas
 
-HELP = "命令：/help 查看帮助 | /quit 退出 | /clear 清空历史 | /history 查看消息数 | /save [路径] | /load [路径] | /usage 查看用量"
+HELP = "命令：/help 查看帮助 | /workdir [路径] 设置工作区 | /quit 退出 | /clear 清空历史 | /history 查看消息数 | /save [路径] | /load [路径] | /usage 查看用量"
 
 
 def interpret(line: str) -> tuple[str, str | None]:
@@ -26,6 +27,8 @@ def interpret(line: str) -> tuple[str, str | None]:
         return ("clear", None)
     if s == "/history":
         return ("history", None)
+    if s.startswith("/workdir"):
+        return ("workdir", s[len("/workdir") :].strip() or None)
     if s.startswith("/save"):
         return ("save", s[len("/save") :].strip() or "history.json")
     if s.startswith("/load"):
@@ -42,7 +45,7 @@ def repl(config: Config, workdir: str = ".") -> int:
     print("交互模式已启动。", HELP)
     while True:
         try:
-            line = input(">> ")
+            line = input(f"[{workdir}] >> ")
         except (EOFError, KeyboardInterrupt):
             print()
             break
@@ -54,6 +57,17 @@ def repl(config: Config, workdir: str = ".") -> int:
             break
         if action == "help":
             print(HELP)
+            continue
+        if action == "workdir":
+            if payload:
+                p = Path(payload).expanduser().resolve()
+                if not p.is_dir():
+                    print(f"错误：目录不存在 {p}（请先创建）")
+                    continue
+                workdir = str(p)
+                print(f"工作区已设置为：{workdir}")
+            else:
+                print(f"当前工作区：{workdir}")
             continue
         if action == "clear":
             messages[:] = [{"role": "system", "content": SYSTEM_PROMPT}]

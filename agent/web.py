@@ -13,6 +13,7 @@ import queue
 import threading
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 
 from .config import Config
 from .llm import LLMClient
@@ -96,9 +97,14 @@ class AgentHandler(BaseHTTPRequestHandler):
     def _handle_events(self) -> None:
         """SSE 流式：后台线程运行 agent，逐条推送输出，[DONE] 结束。"""
         parsed = urllib.parse.urlparse(self.path)
-        task = (urllib.parse.parse_qs(parsed.query).get("task") or [""])[0].strip()
+        query = urllib.parse.parse_qs(parsed.query)
+        task = (query.get("task") or [""])[0].strip()
         if not task:
             self.send_error(400, "缺少 task 参数")
+            return
+        workdir = (query.get("workdir") or [None])[0] or self.server.workdir
+        if not Path(workdir).is_dir():
+            self.send_error(400, f"工作区不存在：{workdir}")
             return
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
@@ -108,7 +114,6 @@ class AgentHandler(BaseHTTPRequestHandler):
         q: queue.Queue = queue.Queue()
         writer = _SseWriter(q)
         config = self.server.config
-        workdir = self.server.workdir
 
         def worker() -> None:
             try:
@@ -144,7 +149,10 @@ class AgentHandler(BaseHTTPRequestHandler):
                 task = str(body.get("task", "")).strip()
                 if not task:
                     raise ValueError("任务为空")
-                output = run_task_output(self.server.config, task, self.server.workdir)
+                workdir = str(body.get("workdir") or self.server.workdir)
+                if not Path(workdir).is_dir():
+                    raise ValueError(f"工作区不存在：{workdir}")
+                output = run_task_output(self.server.config, task, workdir)
                 result = {"ok": True, "output": output}
             except Exception as exc:  # noqa: BLE001 - 错误回传前端展示
                 result = {"ok": False, "error": str(exc)}

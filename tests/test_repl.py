@@ -66,6 +66,23 @@ def test_interpret_save_load():
     assert interpret("/load bar.json") == ("load", "bar.json")
 
 
+def test_interpret_workdir():
+    assert interpret("/workdir") == ("workdir", None)
+    assert interpret("/workdir foo") == ("workdir", "foo")
+
+
+def test_repl_workdir_switch(capsys, tmp_path):
+    with mock.patch(
+        "builtins.input",
+        side_effect=[f"/workdir {tmp_path}", "/workdir", f"/workdir {tmp_path}/nope", "/quit"],
+    ):
+        repl(_config(), workdir=".")
+    out = capsys.readouterr().out
+    assert "工作区已设置" in out
+    assert f"当前工作区：{tmp_path}" in out
+    assert "目录不存在" in out  # 无效目录报错
+
+
 def test_repl_save_writes_file(tmp_path):
     import json
 

@@ -63,6 +63,32 @@ def test_web_server_roundtrip():
         server.server_close()
 
 
+def test_web_run_rejects_missing_workdir(tmp_path):
+    server = ThreadingHTTPServer(("127.0.0.1", 0), AgentHandler)
+    server.config = _config()
+    server.workdir = "."
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = server.server_address[1]
+    client = mock.Mock()
+    client.chat.return_value = _response("完成")
+    try:
+        with mock.patch("agent.web.LLMClient", return_value=client):
+            data = json.dumps({"task": "你好", "workdir": str(tmp_path / "nope")}).encode("utf-8")
+            req = urllib.request.Request(
+                f"http://127.0.0.1:{port}/run",
+                data=data,
+                headers={"Content-Type": "application/json"},
+            )
+            with urllib.request.urlopen(req) as resp:
+                result = json.loads(resp.read().decode("utf-8"))
+            assert result["ok"] is False
+            assert "工作区不存在" in result["error"]
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
 def test_web_sse_stream():
     server = ThreadingHTTPServer(("127.0.0.1", 0), AgentHandler)
     server.config = _config()
