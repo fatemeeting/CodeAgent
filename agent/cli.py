@@ -8,6 +8,7 @@ from dataclasses import replace
 from .config import Config
 from .llm import LLMClient
 from .loop import run
+from .plan import make_plan
 from .repl import repl
 from .suggest import suggest_followups
 
@@ -26,6 +27,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--reflect", action="store_true", help="最终答复前注入自检（reflection）")
     parser.add_argument("--suggest", action="store_true", help="任务完成后推荐后续问题（猜你想问）")
     parser.add_argument("--stream", action="store_true", help="最终答复流式输出")
+    parser.add_argument("--plan", action="store_true", help="执行前先生成分步计划")
     return parser
 
 
@@ -56,7 +58,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.task is None:
         return repl(config, workdir=args.workdir or ".")
     client = LLMClient(config)
-    result = run(config, args.task, workdir=args.workdir or ".", client=client)
+    task = args.task
+    if args.plan:
+        plan = make_plan(client, task)
+        print("计划：")
+        print(plan)
+        print()
+        task = f"{task}\n\n已制定的执行计划：\n{plan}\n请按计划逐步执行。"
+    result = run(config, task, workdir=args.workdir or ".", client=client)
     if not config.stream:
         print(result)
     if args.suggest:

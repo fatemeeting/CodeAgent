@@ -1,18 +1,23 @@
 # context-pack.md — 当前阶段上下文包
 
-> 当前阶段：**迭代 4 · 完成（猜你想问 + 流式输出）**
+> 当前阶段：**迭代 5 · 切片 5.1（任务规划 plan-first）**
 
-## 本阶段已完成
+## 当前阶段目标
 
-- 切片 4.1 猜你想问：`--suggest` 任务完成后推荐后续问题
-- 切片 4.2 流式输出：`--stream` 最终答复逐 token 输出
+执行前先让模型输出分步计划（3–6 步），打印后把计划注入执行上下文；`--plan` 开启。
 
-## 下一阶段（迭代 5）
+## 必须读
 
-- 候选：极简 Web 终端 / 多 provider 切换 / 命令沙箱
-- 开工前先写：SPEC 增项 + CHECKLIST 增项 + 本 context-pack，再动代码
+- `SPEC.md`（迭代 5 范围）
+- `agent/suggest.py`（同款「复用 client 再调一次」模式）
+- `agent/parser.py`（`parse_response`）
+- `docs/context-snapshot.md`
 
 ## 不得读 / 不得改
 
 - `.env`（真实凭据）
-- 已放行代码（除非必要最小修改）
+
+## 输出要求
+
+- 产出：`agent/plan.py`、`agent/cli.py`（`--plan`）、`tests/test_plan.py`
+- 验收：`pytest -q` 全绿；`--plan` 真实冒烟
