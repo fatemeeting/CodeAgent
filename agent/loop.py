@@ -20,6 +20,24 @@ SYSTEM_PROMPT = (
 MAX_TOOL_TEXT = 4000  # 单条工具观测回填给模型前的截断上限，避免上下文膨胀
 
 
+def _brief(text: Any, limit: int) -> str:
+    """把文本压成单行简短摘要，超出限制用省略号截断。"""
+    s = str(text)
+    if len(s) <= limit:
+        return s
+    return s[:limit] + "…"
+
+
+def _log_tool_call(step: int, name: str, arguments: dict[str, Any]) -> None:
+    """打印工具调用（过程日志与最终答案都走 stdout，最终答案在最后一行）。"""
+    print(f"[步骤 {step}] 调用工具 {name}：{_brief(arguments, 150)}")
+
+
+def _log_observation(observation: str) -> None:
+    collapsed = " | ".join(line.strip() for line in observation.splitlines() if line.strip())
+    print(f"        ↳ {_brief(collapsed, 200)}")
+
+
 def _assistant_message(parsed: Any) -> dict[str, Any]:
     """把解析结果重建为 OpenAI 兼容的 assistant 消息（含 tool_calls）。"""
     msg: dict[str, Any] = {"role": "assistant", "content": parsed.content or None}
@@ -43,7 +61,7 @@ def run(config: Config, task: str, workdir: str = ".") -> str:
     ]
     tools = tool_schemas()
 
-    for _ in range(config.max_iterations):
+    for step in range(1, config.max_iterations + 1):
         messages = truncate_history(messages, config.max_context_tokens)
         response = client.chat(messages, tools=tools)
         parsed = parse_response(response)
@@ -54,12 +72,14 @@ def run(config: Config, task: str, workdir: str = ".") -> str:
 
         messages.append(_assistant_message(parsed))
         for tc in parsed.tool_calls:
+            _log_tool_call(step, tc.name, tc.arguments)
             try:
                 observation = dispatch(tc.name, tc.arguments, workdir)
             except Exception as exc:  # noqa: BLE001 - 工具异常回填为观测，不中断循环
                 observation = f"错误：工具 {tc.name} 执行异常：{exc}"
             if len(observation) > MAX_TOOL_TEXT:
                 observation = observation[:MAX_TOOL_TEXT] + "\n...（观测过长已截断）"
+            _log_observation(observation)
             messages.append({"role": "tool", "tool_call_id": tc.id, "content": observation})
 
     # 终止条件 2：达到最大迭代上限

@@ -88,3 +88,17 @@ def test_run_tool_error_becomes_observation(tmp_path):
     second_messages = client.chat.call_args_list[1].args[0]
     tool_msg = next(m for m in second_messages if m.get("role") == "tool")
     assert "错误" in tool_msg["content"]
+
+
+def test_run_logs_tool_calls(capsys, tmp_path):
+    responses = [
+        _response(content=None, tool_calls=[_tool_call()]),
+        _response(content="完成"),
+    ]
+    client = mock.Mock()
+    client.chat.side_effect = responses
+    with mock.patch("agent.loop.LLMClient", return_value=client):
+        run(_config(), "创建 a.txt", workdir=str(tmp_path))
+    out = capsys.readouterr().out
+    assert "调用工具 write_file" in out
+    assert "↳" in out

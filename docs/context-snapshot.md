@@ -12,11 +12,11 @@
 - 远程仓库已连接并公开：`git@github.com:fatemeeting/CodeAgent.git`；GitHub Actions `CI` conclusion=success
 - 阶段 4 上下文管理通过：自研 token 估算 + 历史截断；`pytest` 32 passed
 - 阶段 5 集成回归通过：3 个真实任务（写+执行 / 改+验证 / 列+搜索）全部闭环，32 测试无回退
-- CHECKLIST：A/B/C/E/F 全部通过，D 仅剩 D1（过程可读）一项
+- D1 已补：主循环打印每步工具调用与结果摘要（stdout），`pytest` 33 passed
+- CHECKLIST：A–F 全部通过（31 项）
 
 ## 未完成 / 未决
 
-- D1（体验）：主循环暂不打印每步工具调用过程（loop 静默执行，仅返回最终答案）——视频演示前建议补上
 - 提交物（阶段 6）：README.txt（≤1000 字）+ 视频 + 推送 stage 4/5 到远程
 
 ## 下一阶段资料

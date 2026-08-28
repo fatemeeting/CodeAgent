@@ -152,4 +152,18 @@
   - `pytest -q` → **32 passed**（无回退）
   - B4 无被禁依赖（grep 无命中）；C1 无真实密钥（`git grep sk-[A-Za-z0-9]{24,}` 无命中）
 - **风险处置**：无（3 个任务全过，无失败项）
+- **人工放行决定**：通过
+
+## 阶段 5 补充：D1 过程可读
+
+- **时间**：2026-08-28
+- **给 Agent 的任务**：补 D1——主循环打印每步工具调用与结果摘要
+- **Agent 修改了什么**：
+  - `agent/loop.py`：新增 `_brief` / `_log_tool_call` / `_log_observation`，每步打印「[步骤 N] 调用工具 X：参数」与「↳ 观测摘要」
+  - `tests/test_loop.py`：新增 `test_run_logs_tool_calls`（capsys 校验打印）
+  - `CHECKLIST.md`：D1 勾选
+- **检查证据**：
+  - `pytest -q` → **33 passed**
+  - 真实冒烟：`[步骤 1] 调用工具 write_file…` `↳ 已写入…` `[步骤 2] 调用工具 execute_command…` `↳ hello | [exit_code: 0]`，SMOKE EXIT=0
+- **设计决策**：过程日志走 stdout（而非 stderr），避免 PowerShell 红色噪音；最终答案在最后一行
 - **人工放行决定**：（待用户确认：通过 / 重试 / 降级 / 停止）
