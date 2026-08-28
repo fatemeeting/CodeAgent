@@ -1,19 +1,24 @@
 # context-pack.md — 当前阶段上下文包
 
-> 当前阶段：**迭代 5 · 完成（任务规划 + 并行工具 + 人工确认）**
+> 当前阶段：**迭代 6 · 切片 6.1（极简 Web 终端）**
 
-## 本阶段已完成
+## 当前阶段目标
 
-- 切片 5.1 任务规划：`--plan` 执行前输出分步计划
-- 切片 5.2 并行工具调用：多个 tool_calls 并发执行
-- 切片 5.3 human-in-the-loop：`--confirm` 危险命令人工确认
+自写标准库 HTTP 服务（`http.server`，零新依赖）：`GET /` 返回表单页，`POST /run` 捕获 agent 全部输出并返回 JSON。入口 `python -m agent.web`。
 
-## 下一阶段（迭代 6）
+## 必须读
 
-- 候选：极简 Web 终端 / 多 provider 切换 / 命令沙箱（真正的安全边界，替代模式匹配）
-- 开工前先写：SPEC 增项 + CHECKLIST 增项 + 本 context-pack，再动代码
+- `SPEC.md`（迭代 6 范围）
+- `agent/loop.py`（`run` 输出路径）
+- `agent/config.py`（`Config.from_env`）
+- `docs/context-snapshot.md`
 
 ## 不得读 / 不得改
 
 - `.env`（真实凭据）
 - 已放行代码（除非必要最小修改）
+
+## 输出要求
+
+- 产出：`agent/web.py`、`tests/test_web.py`
+- 验收：`pytest -q` 全绿；本地起服务 POST 真实任务闭环

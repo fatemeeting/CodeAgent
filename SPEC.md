@@ -94,4 +94,9 @@ coding-agent/
 1. **任务规划（plan-first）**：`--plan` 执行前先输出分步计划，再把计划注入执行上下文。
 2. **并行工具调用**：模型一次返回多个 tool_calls 时并发执行（独立工具）。
 3. **human-in-the-loop**：`--confirm` 危险命令（rm / del / git push 等）执行前请求人工确认。
+
+## 11. 迭代 6（增量：Web 界面）
+
+1. **极简 Web 终端**：自写标准库 HTTP 服务（`http.server`，零新依赖），表单提交任务、显示过程与结果。
+2. **SSE 流式**：过程日志与最终答复通过 Server-Sent Events 实时推送到浏览器。
 ```

@@ -1,0 +1,63 @@
+"""web.py 单元测试：输出捕获 + HTTP 服务（mock LLM，免 key）。"""
+
+import json
+import threading
+import urllib.request
+from http.server import ThreadingHTTPServer
+from unittest import mock
+
+from agent.config import Config
+from agent.web import AgentHandler, run_task_output
+
+
+def _config():
+    return Config(
+        api_key="k", base_url="https://example.com", model="deepseek-chat", max_iterations=5
+    )
+
+
+def _response(content="完成"):
+    msg = mock.Mock()
+    msg.content = content
+    msg.tool_calls = None
+    choice = mock.Mock()
+    choice.message = msg
+    resp = mock.Mock()
+    resp.choices = [choice]
+    return resp
+
+
+def test_run_task_output_captures_stdout():
+    client = mock.Mock()
+    client.chat.return_value = _response("完成")
+    with mock.patch("agent.web.LLMClient", return_value=client):
+        out = run_task_output(_config(), "任务", workdir=".")
+    assert "完成" in out  # 过程日志 + 最终答复都被捕获
+
+
+def test_web_server_roundtrip():
+    server = ThreadingHTTPServer(("127.0.0.1", 0), AgentHandler)
+    server.config = _config()
+    server.workdir = "."
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = server.server_address[1]
+    client = mock.Mock()
+    client.chat.return_value = _response("完成")
+    try:
+        with mock.patch("agent.web.LLMClient", return_value=client):
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/") as resp:
+                assert "编程智能体" in resp.read().decode("utf-8")
+            data = json.dumps({"task": "你好"}).encode("utf-8")
+            req = urllib.request.Request(
+                f"http://127.0.0.1:{port}/run",
+                data=data,
+                headers={"Content-Type": "application/json"},
+            )
+            with urllib.request.urlopen(req) as resp:
+                result = json.loads(resp.read().decode("utf-8"))
+            assert result["ok"] is True
+            assert "完成" in result["output"]
+    finally:
+        server.shutdown()
+        server.server_close()
