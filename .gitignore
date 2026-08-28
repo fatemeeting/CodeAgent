@@ -3,3 +3,7 @@
 /.ssh
 
 .github_known_hosts
+
+requirement_doc/
+
+.env
