@@ -9,6 +9,7 @@ from .config import Config
 from .llm import LLMClient
 from .loop import run
 from .repl import repl
+from .suggest import suggest_followups
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -23,6 +24,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-context-tokens", type=int, help="上下文 token 预算（超出则裁剪历史）")
     parser.add_argument("--usage", action="store_true", help="运行后输出 token 用量与估算费用")
     parser.add_argument("--reflect", action="store_true", help="最终答复前注入自检（reflection）")
+    parser.add_argument("--suggest", action="store_true", help="任务完成后推荐后续问题（猜你想问）")
     return parser
 
 
@@ -53,6 +55,9 @@ def main(argv: list[str] | None = None) -> int:
     client = LLMClient(config)
     result = run(config, args.task, workdir=args.workdir or ".", client=client)
     print(result)
+    if args.suggest:
+        print("\n你可能还想问：")
+        print(suggest_followups(client, args.task))
     if args.usage:
         print(client.usage_summary_text())
     return 0

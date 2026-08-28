@@ -1,18 +1,23 @@
 # context-pack.md — 当前阶段上下文包
 
-> 当前阶段：**迭代 3 · 完成（token 统计 + 自我反思）**
+> 当前阶段：**迭代 4 · 切片 4.1（猜你想问）**
 
-## 本阶段已完成
+## 当前阶段目标
 
-- 切片 3.1 token/费用统计：`LLMClient` 累计用量，`--usage` / `/usage`
-- 切片 3.2 自我反思：`--reflect` 最终答复前自检，发现问题则修正
+单次任务完成后，再调一次模型生成 2–3 个后续问题建议；`--suggest` 开启，复用同一 client（累计 token）。
 
-## 下一阶段（迭代 4）
+## 必须读
 
-- 候选：流式输出 / 「猜你想问」/ 极简 Web 终端
-- 开工前先写：SPEC 增项 + CHECKLIST 增项 + 本 context-pack，再动代码
+- `SPEC.md`（迭代 4 范围）
+- `agent/llm.py`（`chat` 无工具调用）
+- `agent/parser.py`（`parse_response`）
+- `docs/context-snapshot.md`
 
 ## 不得读 / 不得改
 
 - `.env`（真实凭据）
-- 已放行代码（除非必要最小修改）
+
+## 输出要求
+
+- 产出：`agent/suggest.py`、`agent/cli.py`（`--suggest`）、`tests/test_suggest.py`
+- 验收：`pytest -q` 全绿

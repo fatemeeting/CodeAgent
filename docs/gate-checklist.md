@@ -1,21 +1,20 @@
-# gate-checklist.md — 迭代 3 · 切片 3.2 放行清单
+# gate-checklist.md — 迭代 4 · 切片 4.1 放行清单
 
-> 当前阶段：迭代 3 · 切片 3.2（自我反思 reflection）。放行决定：通过 / 重试 / 降级 / 停止。
+> 当前阶段：迭代 4 · 切片 4.1（猜你想问）。放行决定：通过 / 重试 / 降级 / 停止。
 
 ## 必过项
 
-- [x] 模型给出答复后注入自检提示（仅一轮）
-- [x] 反思发现问题→继续调工具修正；确认完成→返回原答复
-- [x] 未开启 reflect 时行为不变（不回归）
+- [x] `suggest_followups` 复用 client 调一次模型（无工具）返回建议
+- [x] `--suggest` 在单次任务后输出后续问题建议
 - [x] `pytest -q` 免 key 全绿
 
 ## 证据位置
 
-- 测试与冒烟：见 `docs/AGENT_LOG.md` 迭代 3 切片 3.2 条目
-- 代码：`agent/loop.py`、`agent/config.py`、`agent/cli.py`、`tests/test_loop.py`
+- 测试与冒烟：见 `docs/AGENT_LOG.md` 迭代 4 切片 4.1 条目
+- 代码：`agent/suggest.py`、`agent/cli.py`、`tests/test_suggest.py`
 
 ## 退出决定
 
-- 通过 → 迭代 3 完成
+- 通过 → 切片 4.2（流式输出）
 - 重试 → 补齐缺失项后复查
 - 停止 → 记录原因
