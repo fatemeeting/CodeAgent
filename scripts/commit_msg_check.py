@@ -1,4 +1,4 @@
-"""commit-msg 钩子：要求提交信息包含阶段名。
+"""commit-msg 钩子：要求提交信息包含阶段名或迭代名。
 
 用法：由 scripts/install_hooks.py 安装为 .git/hooks/commit-msg；
 git 会把提交信息文件路径作为第一个参数传入。
@@ -11,7 +11,7 @@ import re
 import sys
 from pathlib import Path
 
-STAGE_RE = re.compile(r"阶段\s?\d|stage\s?\d", re.IGNORECASE)
+STAGE_RE = re.compile(r"(阶段|迭代|stage|iteration)\s?\d", re.IGNORECASE)
 
 
 def main() -> int:
@@ -23,7 +23,7 @@ def main() -> int:
         print("提交信息为空")
         return 1
     if not STAGE_RE.search(msg):
-        print(f"提交信息需包含阶段名（如「阶段2：工具层」）：{msg!r}")
+        print(f"提交信息需包含阶段/迭代名（如「阶段2：工具层」或「迭代3切片3.1」）：{msg!r}")
         return 1
     return 0
 
