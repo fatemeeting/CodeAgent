@@ -69,4 +69,21 @@
   - `python -m pytest -q` → **10 passed in 0.28s**，EXIT=0（全程免 key）
   - execute_command 的 subprocess 管道捕获在沙箱正常（`echo hello`、`sys.exit(3)` 均验证）
 - **风险处置**：无
+- **人工放行决定**：通过
+
+## CI/CD 基础设施（阶段 2 补充）
+
+- **时间**：2026-08-28
+- **给 Agent 的任务**：补齐测试覆盖（config/llm），搭建 git 仓库 + pre-commit 钩子 + GitHub Actions CI
+- **Agent 修改了什么**：
+  - `tests/test_config.py`（4 用例：.env 解析、默认值、缺 key 报错）、`tests/test_llm.py`（3 用例：返回、重试耗尽抛 LLMError、重试后成功）
+  - `scripts/gate_check.py`（pre-commit：拦 .env + 扫 `sk-` 密钥 + 查 gate 文件）、`scripts/commit_msg_check.py`（提交信息含阶段名）、`scripts/install_hooks.py`
+  - `.github/workflows/ci.yml`（compileall + pytest，mock 免 key）
+  - `git init`（分支 main）+ 分阶段提交：`bf400e5` 阶段0-2、本提交 CI/CD
+  - 更新 `AGENTS.md`（第 6 节 CI/CD 与提交规范）
+- **检查证据**：
+  - `python -m pytest -q` → **17 passed**（10 工具 + 4 config + 3 llm）
+  - 提交树校验：`.env` / `.venv` 未被跟踪
+  - gate_check 直测 exit 0；密钥正则命中真实 key、不误伤占位符；commit_msg 合法→0 / 非法→1
+- **风险备注**：本沙箱限制了 Git Bash 的共享内存（`sh.exe CreateFileMapping error 5`），shell 包装的钩子在此沙箱内无法端到端运行，但 Python 逻辑已直测通过；在正常机器与 GitHub Actions 上钩子可正常生效
 - **人工放行决定**：（待用户确认：通过 / 重试 / 降级 / 停止）

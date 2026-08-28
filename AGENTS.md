@@ -23,6 +23,7 @@ python -m agent --help           # CLI 可用性
 python -m agent "你好"           # 真实冒烟（需 DEEPSEEK_API_KEY）
 git status --ignored             # 确认 .env 未跟踪
 git grep -n "sk-" -- . ':!*.md'  # 扫描疑似密钥（人工核对）
+python scripts/install_hooks.py    # 安装 git 钩子（clone 后执行一次）
 ```
 
 ## 4. 禁止事项与安全边界
@@ -41,3 +42,12 @@ git grep -n "sk-" -- . ':!*.md'  # 扫描疑似密钥（人工核对）
 3. 每次修改后给出可观察证据（命令输出 / 日志），写入 `docs/AGENT_LOG.md`
 4. Checklist 未过不进下一阶段；证据不足不视为完成
 5. 失败时缩小范围或降级，不硬撑
+
+## 6. CI/CD 与提交规范
+
+- **本地钩子**：`python scripts/install_hooks.py` 安装
+  - `pre-commit`：拦截 `.env` 入库、扫描 `sk-` 密钥、检查 SPEC/CHECKLIST/AGENTS 存在
+  - `commit-msg`：提交信息必须包含阶段名（如「阶段3：闭环循环」）
+- **CI**：`.github/workflows/ci.yml` 在 push / PR 时执行 `compileall` + `pytest`（mock LLM，免 key）
+- **分支**：每阶段 / 功能切片用独立分支，Merge Request 承载人工 review
+- **红线**：绝不 `git push --force`；不压缩或改写已推送历史

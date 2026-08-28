@@ -9,6 +9,7 @@
 - openai 3.x 客户端 API 已验证兼容
 - 阶段 2 工具层通过：六个工具 + JSON Schema + 注册表 + dispatch；`pytest -q` 10 passed
 - execute_command 的 subprocess 管道捕获在沙箱正常（EPERM 风险排除）
+- CI/CD 就绪：独立 git 仓库（分支 main）+ pre-commit/commit-msg 钩子 + GitHub Actions CI；`pytest` 已扩至 17 用例
 
 ## 未完成 / 未决
 
