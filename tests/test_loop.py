@@ -90,6 +90,44 @@ def test_run_tool_error_becomes_observation(tmp_path):
     assert "错误" in tool_msg["content"]
 
 
+def _reflect_config(max_iterations=5):
+    return Config(
+        api_key="k",
+        base_url="https://example.com",
+        model="deepseek-chat",
+        max_iterations=max_iterations,
+        reflect=True,
+    )
+
+
+def test_run_reflect_confirms_then_returns_original():
+    responses = [
+        _response(content="A"),
+        _response(content="已确认完成"),
+    ]
+    client = mock.Mock()
+    client.chat.side_effect = responses
+    with mock.patch("agent.loop.LLMClient", return_value=client):
+        out = run(_reflect_config(), "任务", workdir=".")
+    assert out == "A"  # 返回原始答复（更详细）
+    assert client.chat.call_count == 2
+
+
+def test_run_reflect_finds_issue_then_fixes(tmp_path):
+    responses = [
+        _response(content="A"),
+        _response(content=None, tool_calls=[_tool_call("c1", "write_file", '{"path": "a.txt", "content": "fixed"}')]),
+        _response(content="B"),
+    ]
+    client = mock.Mock()
+    client.chat.side_effect = responses
+    with mock.patch("agent.loop.LLMClient", return_value=client):
+        out = run(_reflect_config(), "任务", workdir=str(tmp_path))
+    assert out == "B"
+    assert (tmp_path / "a.txt").read_text(encoding="utf-8") == "fixed"
+    assert client.chat.call_count == 3
+
+
 def test_run_logs_tool_calls(capsys, tmp_path):
     responses = [
         _response(content=None, tool_calls=[_tool_call()]),

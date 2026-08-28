@@ -1,16 +1,16 @@
 # context-pack.md — 当前阶段上下文包
 
-> 当前阶段：**迭代 3 · 切片 3.1（token / 费用统计）**
+> 当前阶段：**迭代 3 · 切片 3.2（自我反思 reflection）**
 
 ## 当前阶段目标
 
-`LLMClient` 累计 prompt / completion tokens；单次任务 `--usage`、REPL `/usage` 输出用量与估算费用（DeepSeek 价格常量，标注「估算」）。
+模型给出最终答复后注入自检提示：发现问题则继续调用工具修正，确认完成才返回；`--reflect` / `DEEPSEEK_REFLECT` 开启（仅一轮反思，防无限循环）。
 
 ## 必须读
 
 - `SPEC.md`（迭代 3 范围）
-- `agent/llm.py`（需加累计与 summary）
-- `agent/loop.py`（`run` 需支持复用 client）
+- `agent/loop.py`（`run_turn` 需加反思轮）
+- `agent/config.py`（加 `reflect`）
 - `docs/context-snapshot.md`
 
 ## 不得读 / 不得改
@@ -19,5 +19,5 @@
 
 ## 输出要求
 
-- 产出：`agent/llm.py`（usage 累计）、`agent/loop.py`（run 复用 client）、`agent/cli.py`（`--usage`）、`agent/repl.py`（`/usage`）、`tests/test_llm.py`（+1）
+- 产出：`agent/loop.py`（`REFLECT_PROMPT` + 反思轮）、`agent/config.py`（`reflect`）、`agent/cli.py`（`--reflect`）、`tests/test_loop.py`（+2）
 - 验收：`pytest -q` 全绿

@@ -17,6 +17,11 @@ SYSTEM_PROMPT = (
     "任务完成后直接给出简洁的最终总结，不要再调用工具。"
 )
 
+REFLECT_PROMPT = (
+    "请自我检查：以上结果是否真正、完整地完成了用户的任务？"
+    "如有遗漏或错误，请继续使用工具修正；若已完整正确，请直接回复一句确认。"
+)
+
 MAX_TOOL_TEXT = 4000  # 单条工具观测回填给模型前的截断上限，避免上下文膨胀
 
 
@@ -61,6 +66,8 @@ def run_turn(
     workdir: str,
 ) -> str:
     """在给定历史 messages 上执行一轮工具循环；原地更新 messages，返回最终文本。"""
+    reflected = False
+    pending_final: str | None = None
     for step in range(1, config.max_iterations + 1):
         messages[:] = truncate_history(messages, config.max_context_tokens)
         response = client.chat(messages, tools=tools)
@@ -68,10 +75,19 @@ def run_turn(
 
         # 终止条件 1：模型未请求工具，视为最终答复
         if not parsed.tool_calls:
-            final = parsed.content or "（模型未返回文本回复）"
-            messages.append({"role": "assistant", "content": final})
+            if config.reflect and not reflected:
+                # 反思：首次给出答复后注入自检提示（仅一轮）
+                reflected = True
+                pending_final = parsed.content or ""
+                messages.append({"role": "assistant", "content": pending_final})
+                messages.append({"role": "user", "content": REFLECT_PROMPT})
+                continue
+            final = (pending_final or parsed.content) or "（模型未返回文本回复）"
+            messages.append({"role": "assistant", "content": parsed.content or ""})
             return final
 
+        # 模型要调用工具：反思发现问题，丢弃暂存的原答复
+        pending_final = None
         messages.append(_assistant_message(parsed))
         for tc in parsed.tool_calls:
             _log_tool_call(step, tc.name, tc.arguments)

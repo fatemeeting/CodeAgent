@@ -209,4 +209,19 @@
 - **检查证据**：
   - `pytest -q` → **42 passed**（37 旧 + 5 新）
   - 端到端冒烟：阶段 1 创建 demo.txt + `/save`（5 条消息，1111 字节）→ 阶段 2 `/load` + 「我刚才创建的文件叫什么」→ 正确回答 `demo.txt`
+- **人工放行决定**：通过
+
+## 迭代 3：token 统计 + 自我反思
+
+- **时间**：2026-08-28
+- **给 Agent 的任务**：切片 3.1 token/费用统计；切片 3.2 自我反思（reflection）
+- **Agent 修改了什么**：
+  - 切片 3.1：`agent/llm.py` 累计 prompt/completion tokens + `usage_summary`/`usage_summary_text`（价格常量估算）；`agent/loop.py` `run` 支持复用 client；`agent/cli.py` `--usage`；`agent/repl.py` `/usage`
+  - 切片 3.2：`agent/config.py` 加 `reflect`；`agent/loop.py` 加 `REFLECT_PROMPT` + 反思轮（仅一轮：确认完成返回原答复、发现问题继续修正）；`agent/cli.py` `--reflect`
+  - 测试：`tests/test_llm.py` +1、`tests/test_repl.py` +2、`tests/test_loop.py` +2
+  - 更新 `SPEC.md`（迭代 3）、`CHECKLIST.md`（H 节）、`docs/context-pack.md`、`docs/gate-checklist.md`
+- **检查证据**：
+  - `pytest -q` → **46 passed**
+  - `--usage` 冒烟：prompt 2803 / completion 134 / 总计 2937（估算 $0.0009）
+  - `--reflect` 冒烟：正常完成（反思透明，返回原答复）
 - **人工放行决定**：（待用户确认：通过 / 重试 / 降级 / 停止）
