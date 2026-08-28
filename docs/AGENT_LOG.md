@@ -272,4 +272,15 @@
   - `POST /run` 冒烟：真实任务输出过程 + 最终答复，ok=True
   - `GET /events` 冒烟：SSE 逐条推送（工具调用 / 观测 / 最终答复 / [DONE]）
 - **设计决策**：Web 服务也用标准库自写（不引入 Flask/FastAPI），维持「仅 openai」依赖约束；过程输出复用 D1 的 stdout 打印（`redirect_stdout` 转发到 SSE 队列）
-- **人工放行决定**：（待用户确认：通过 / 重试 / 降级 / 停止）
+- **人工放行决定**：通过
+
+## CI 修复：跨平台测试 + 推送工作流确立
+
+- **时间**：2026-08-28
+- **问题**：GitHub Actions 在 ubuntu 上 `Run tests` 失败——`test_run_confirm_dangerous_approved` 用了 Windows 专用命令 `del x.txt`（Linux 无此命令，断言失败）
+- **修复**：
+  - 测试改用 `{sys.executable} -c "os.remove(...)"`（跨平台）
+  - `DANGEROUS_PATTERNS` 增补 `os.remove` / `os.rmdir` / `shutil.rmtree`——堵住迭代 5 冒烟发现的「python3 os.remove」绕过
+- **证据**：本地 `pytest` 57 passed；推送后 GitHub Actions `CI` conclusion=**success**（`1b0b5f5`）
+- **工作流确立**（此后每笔提交执行）：提交 → `$env:GIT_SSH="E:\Codes\CodeAgent\.ssh\ssh-github.cmd"; git push origin main` → 轮询 Actions API 状态 → 失败则定位纠错
+- **人工放行决定**：通过
