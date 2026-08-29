@@ -12,7 +12,7 @@ https://github.com/fatemeeting/CodeAgent
 3. 配置凭据：复制 .env.example 为 .env，填入 DEEPSEEK_API_KEY（凭据绝不入库）
 4. 单次任务：python -m agent "你的编程任务" [--workdir 目录] [--max-iterations N]
 5. 交互模式：python -m agent（无任务参数；支持 /save /load 持久化、/usage 查看用量）
-6. Web 界面：python -m agent.web [--port 8080] [--workdir 目录]，浏览器打开 http://127.0.0.1:8080（先填工作区，再发任务）
+6. Web 界面：python -m agent.web [--port 8080] [--workdir 目录]，浏览器打开 http://127.0.0.1:8080（整页工作区管理器：📂 原生选择 / 确认 / 最近列表 → Agent Window 对话+文件页 / Editor Window 文件树+Monaco+终端）
 
 示例：
 python -m agent "创建 hello.py 打印 Hello 并运行"
@@ -29,9 +29,9 @@ python -m agent "创建 hello.py 打印 Hello 并运行"
 - 任务规划（--plan）：执行前先生成分步计划
 - 并行工具调用：多个独立工具并发执行
 - 危险命令确认（--confirm）：rm / del 等执行前人工确认
-- Web 界面：python -m agent.web（聊天式界面，模仿 DeepSeek Harness：气泡 + 流式 + 工作区先行 + 原生文件夹选择器）
+- Web 界面：Cursor 风格双模式 IDE——整页工作区管理器（选择 / 确认 / 最近列表）+ Agent Window（对话 / 文件页）+ Editor Window（文件树 / Monaco 编辑器 / 终端），SSE 流式
 - 过程可读：实时打印每步工具调用与结果
-- 57 个单元测试（mock LLM 免 key）+ GitHub Actions CI + pre-commit 密钥扫描
+- 64 个单元测试（mock LLM 免 key）+ GitHub Actions CI + pre-commit 密钥扫描
 
 ## 其它说明
 - 凭据一律通过环境变量或 .env 提供，绝不入库
