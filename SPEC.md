@@ -163,3 +163,22 @@ coding-agent/
 5. **切片 7.5 错误处理与状态指示**：error 事件（severity/retryable）、LLM 重试可见化、SSE 断线「连接中断 + 重新连接」、非零退出码/超时染色、回合状态指示（thinking→tool→answering→done）。
 6. **切片 7.6 集成回归**：真实任务冒烟（正常 + 错误路径）、CLI/REPL/会话/保存/滚动回归、证据入 AGENT_LOG。
 7. **非目标（迭代 8）**：对话/轨迹 Tab 分栏、轨迹导出、跨会话检索、结构化错误驱动的自动恢复闭环。
+
+## 21. 迭代 7 · 切片 7.4-UI（轨迹视觉升级，模仿 DSH DisclosureRow）
+
+> 依据：研读 deepseek-harness 源码（`ReasoningRow` / `GenericCommandCard` / `MessageItem` / `StatsLine` / `design-platform.css`）。仅改 `agent/web.py`，零新依赖。
+
+1. **折叠行一行式**：`图标 标题 · 单行摘要 <meta> ▸`——think 摘要显示思考首行（流式时显示最新行并横向滚动跟随）；tool 摘要显示「工具名 · 参数预览」；整行点击展开。
+2. **展开正文分层**：tool/note/err = 代码卡片（margin 4px、padding 12px 16px、1px 浅边框 rgba(0,0,0,.04)、圆角 12px、背景 #f9fafb、等宽 12.5px、max-height 260px 内滚）；think = 标题下缩进 22px 的三级灰文本（无卡片框）。
+3. **运行态扫光动画**：running 块头部覆盖 300px 渐变光带 2.6s 循环（纯 CSS，`prefers-reduced-motion` 降级）；状态色：成功 #22c55e / 错误 #ef4444。
+4. **气泡与统计行**：用户气泡圆角 22px、padding 10px 16px；回合底部统计行 `N 步 · 工具 Xs · Y tokens`（后端 `turn_end` 事件携带 usage）。
+5. **回放兜底**：重放未闭合（缺 think_end / tool_result）的块自动收尾标记。
+
+## 22. 迭代 7 · 切片 7.4-UI2（整体色调与布局细节，模仿 DSH design-platform）
+
+> 两者总布局不同（本项为三栏编辑器 + 聊天），仅借鉴 DSH 的色调系统与组件质感，不改布局结构。
+
+1. **色调切换**：暖白（#f7f7f4/#26251e/橙 #f54e00）→ DSH 冷调（页面 #f5f6f7、面板 #ffffff、近黑 #0f1115、三级灰 #81858c、极浅边框 rgba(0,0,0,.04)、代码底 #f9fafb）；强调色橙 → **DeepSeek 蓝 #4176e6**（hover #2f5fd0、浅底 rgba(65,118,230,.08)）；状态色统一 DSH（绿 #22c55e / 红 #ef4444 / 琥珀 #f59e0b）。
+2. **布局细节轻量化**：顶栏/输入区/管理器分隔用 1px 极浅边框；会话按钮改无边框轻按钮（灰字 hover 蓝）；工作区 chip 浅灰底；分隔条改 1px 细线（hover 蓝）；树/最近列表 hover 浅蓝底。
+3. **对话质感 DSH 化**：agent 答复改纯文本（去气泡框底，行高 1.65）；输入框白底 16px 圆角 + 聚焦蓝色光晕（0 0 0 3px rgba(65,118,230,.12)）；角色标签 caption 灰。
+4. **验证**：pytest 84 无回归；`node --check`；色调/布局标记冒烟；DOM 垫片回归。

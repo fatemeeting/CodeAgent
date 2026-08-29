@@ -548,3 +548,88 @@
   - 真实服务冒烟：SSE 事件序列精确匹配（turn_start → think → tool → 答复 → turn_end）
   - openai 3.x 内省：`ChoiceDelta` schema 不含 `reasoning_content` 但 `model_validate` 经 pydantic extra 保留字段——`getattr(delta, "reasoning_content")` 方案对真实流有效
 - **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
+
+## 迭代 7 切片 7.4：前端内联折叠轨迹块 + 结构化持久化
+
+- **时间**：2026-08-29
+- **给 Agent 的任务**：切片 7.4——前端消费 `/events` 事件帧：think 折叠块、工具折叠行（耗时 + ✓/✗ + 展开参数/返回）、`round_end{has_tools}` 边界（工具轮叙述折入 📝 说明块、最终答复留在气泡）、error 块；会话持久化 messages（agent 消息带可选 trace 事件数组）与重放；旧数据兼容
+- **Agent 修改了什么**（仅 `agent/web.py`）：
+  - CSS：`.trace` 轨迹容器 + `.tblk` 折叠块（think/tool/note/err 状态色、悬停高亮、▸/▾ 箭头、正文区 max-height 220 内滚动）
+  - JS：`createTblk`（折叠块构建 + 点击开合）、`newTurnState`/`handleEvent`（事件分发：think 流式积累、`content_delta` 实时渲染、`round_end{has_tools}` 叙事折入 note 块/答案留在气泡、tool FIFO 配对结果、error 块）、`renderTraceFromEvents`（重放共用同一分发器）、`appendAgentMsg`（label+轨迹区+气泡结构）、`appendMsg(role, raw, trace)`（重放带轨迹）、`sendTask` 改事件消费（`[DONE]` 时 raw=最终答复、trace=事件数组）
+  - 持久化：`saveMessages` 原样带 trace；`switchSession`/`buildChat` 重放 trace；旧会话消息无 trace 正常显示
+- **检查证据**：
+  - `pytest -q` → **83 passed**（后端未改，无回归）
+  - 冒烟：12 项标记就位（.tblk/.trace/createTblk/handleEvent/renderTraceFromEvents/appendAgentMsg/newTurnState/ev.has_tools/m.trace/t.pendingTools/🧠 思考中/📝 说明）
+  - `node --check` → 语法通过（过程中抓到一处 JS 字符串 `\n` 未转义的真实 bug 并修复）
+  - Node DOM 垫片：完整事件流（think→叙事→tool→答复→[DONE]）→ 答复仅含最终答案、trace 11 事件持久化、轨迹块 3 个（🧠 思考/📝 说明/🔧 write_file (12ms ✓)）、buildChat 重放轨迹块正确 → **JSFLOW 7.4 OK**
+- **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
+
+## 迭代 7 切片 7.4 修复：折叠展开为空 + 轨迹文案
+
+- **时间**：2026-08-29
+- **给 Agent 的任务**（用户反馈两项）：① 轨迹每一条展开为空；② 指示不清——「说明」改为 Model Assistant、「工具调用」改为 Tools，细节放展开内容
+- **根因与修改**（`agent/web.py`）：
+  - 展开为空根因：`body.style.display = ''`（空串）会回落到 CSS 的 `.tblk-body { display: none }`，展开永远是隐藏态 → 改 `open ? 'block' : 'none'`
+  - 文案：叙事块标题 `📝 说明` → `Model Assistant`；工具块标题 `🔧 名称` → `Tools`（工具名/参数/返回移入展开内容：`工具: name\n参数: …\n返回: …`）；think 块保持 `🧠 思考`
+- **检查证据**：
+  - `pytest -q` → **83 passed**（前端改动无回归）
+  - 冒烟标记：`Model Assistant` / `Tools` / `'block' : 'none'` / `工具: ` 就位；`node --check` 通过
+  - Node DOM 垫片：三块标题正确、点击展开后 `display === 'block'` 且内容非空（think「先想」/叙事「我来创建文件」/工具含「返回: 已写入 a.txt」）、再点收起回 none → **JSFLOW 7.4fix OK**
+- **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
+
+## 迭代 7 切片 7.4 修复 2：Tools 展开改为原始格式
+
+- **时间**：2026-08-29
+- **给 Agent 的任务**（用户反馈）：Tools 展开内容希望是原始格式（如 `tool:{...} parameter:{...}`），而非翻译后的中文标签版本；并说明数据来源
+- **数据来源说明**：模型返回 `tool_calls`（`function.name` + `function.arguments` 原始 JSON）→ 后端事件化（此前把**解析后的 Python dict** 截断进 `args`，显示为 `{'path': ...}` 单引号风格）→ 前端套中文标签。因此用户看到的是「翻译 + dict repr」版
+- **Agent 修改了什么**：
+  - `agent/loop.py`：`tool_call` 事件改发 `parameter=_brief(tc.arguments_raw, 200)`（模型原始 arguments JSON 字符串，替换解析后 dict）
+  - `agent/web.py`：展开内容改为 `tool: <name>` / `parameter: <原始 JSON>` / `output: <观测>`；旧会话持久化的 `args` 字段做兼容回退（`ev.parameter !== undefined ? ev.parameter : ev.args`）
+  - `tests/test_loop.py`：断言 `tool_call` 事件的 `parameter` 等于原始 JSON
+- **检查证据**：
+  - `pytest -q` → **83 passed**
+  - 冒烟标记（tool:/parameter:/output:/兼容回退）就位；`node --check` 通过
+  - Node DOM 垫片：展开内容精确等于 `tool: write_file\nparameter: {"path": "a.txt", "content": "hi"}\noutput: 已写入 a.txt` → **JSFLOW 原始格式 OK**
+- **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
+
+## 迭代 7 切片 7.4 修复 3：轨迹不截断
+
+- **时间**：2026-08-29
+- **给 Agent 的任务**（用户反馈）：tool calling 的轨迹不要做截断
+- **Agent 修改了什么**（`agent/loop.py`）：
+  - `tool_call` 事件 `parameter` 改发全文原始 arguments JSON（去掉 200 字截断）
+  - `tool_result` 事件 `output` 改发**完整多行观测**（去掉「折叠为单行 + 200 字截断」）；模型上下文仍按 `MAX_TOOL_TEXT` 截断（两者解耦，互不影响）；`ok` 判定改用完整观测
+  - 安全边界：工具层自身有输出上限（read_file 100KB / execute_command 20K / search 200 条），事件流不会失控
+- **检查证据**：
+  - `pytest -q` → **84 passed**（新增 `test_run_emits_untruncated_tool_output`：15000 字符多行观测完整入事件、无「…」）
+- **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
+
+## 迭代 7 切片 7.4-UI：轨迹视觉升级（模仿 DSH DisclosureRow）
+
+- **时间**：2026-08-29
+- **给 Agent 的任务**：研读 deepseek-harness 仓库（`ReasoningRow`/`GenericCommandCard`/`MessageItem`/`StatsLine`/`design-platform.css`）后模仿其轨迹显示设计，优化界面美观度
+- **DSH 设计语言（研读结论）**：折叠行 = 图标 + 标题 + 单行摘要 + 箭头（折叠态即显示摘要，think 流式跟随最新行）；展开正文 = 代码块风格卡片（260px 内滚/12px 圆角/浅边框）；运行态 = 300px 扫光渐变 2.6s 循环（reduced-motion 降级）；统计行 = `步数 | 耗时 | tokens`；用户气泡 22px
+- **Agent 修改了什么**：
+  - `agent/web.py` CSS：`--tblk-ok: #22c55e / --tblk-err: #ef4444`；`.tblk` 重建为无边框行（hover 浅底、icon/title/sep/summary/meta/arrow 六段式）；tool/note/err 正文卡片化（`#f9fafb` + `rgba(0,0,0,.04)` 边框 + 12px 圆角 + 等宽 + 260px 内滚）；think 正文缩进 22px 文本；`.tblk.running` 扫光动画；`.turn-stats` 统计行；用户气泡 22px
+  - `agent/web.py` JS：`createTblk` 六段式构建；`oneLine`/`latestLine`/`formatMs` 辅助；think 流式摘要 = 最新行（横向跟随）；tool 摘要 = `工具名 · 参数预览`，运行态 `running` 类 → 完成态 `ok/err` + `(12ms ✓)`；`turn_end` 渲染统计行；`renderTraceFromEvents` 回放未闭合块兜底（think 收尾 / tool「（未完成）」err）
+  - `agent/loop.py`：`turn_end` 事件携带 `usage`（JSON 安全：仅取 int 值）
+- **检查证据**：
+  - `pytest -q` → **84 passed**（过程中修复：mock 客户端 `usage_summary` 返回 Mock 导致 SSE JSON 序列化崩溃 → usage 白名单化）
+  - 冒烟标记（`.tblk-summary`/`tblk-sweep`/`.turn-stats`/`#f9fafb`/`22px`/`--tblk-ok` 等 14 项）就位；`node --check` 通过
+  - Node DOM 垫片：think 头部/摘要/字数、note 摘要、tool 完成态类 + `(12ms ✓)` + 摘要预览、统计行 `1 步 · 工具 12ms · 15 tokens`、展开卡片、运行态 `running` 类无 meta → **JSFLOW 7.4-UI OK**
+- **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
+
+## 迭代 7 切片 7.4-UI2：整体色调与布局细节（模仿 DSH design-platform）
+
+- **时间**：2026-08-29
+- **给 Agent 的任务**（用户反馈）：继续模仿 DSH 界面——两者总布局不同仅作参考，优化整体布局细节与色调
+- **Agent 修改了什么**（仅 `agent/web.py` CSS/HTML，布局结构不变）：
+  - 色调切换：暖白+橙 → DSH 冷调——页面 `#f5f6f7`、面板 `#ffffff`、近黑 `#0f1115`、三级灰 `#81858c`、caption `#adb0b5`、极浅边框 `rgba(0,0,0,.04)`、代码底 `#f9fafb`；强调色橙 → DeepSeek 蓝 `#4176e6`（hover `#2f5fd0`、浅底 `rgba(65,118,230,.08)`）；状态色统一 DSH（`#22c55e`/`#ef4444`/`#f59e0b`）
+  - 布局轻量化：顶栏/输入区/管理器/文件页边框改极浅 border-l1；会话按钮改无边框轻按钮（灰字 hover 蓝）；ws-chip 浅灰底；分隔条改 1px 渐变细线（hover 蓝）；树/最近列表 hover 浅蓝底；`.tool` 着色改蓝
+  - 对话质感：agent 答复去气泡框纯文本（行高 1.65）；输入框白底 16px 圆角 + 聚焦蓝色光晕（`0 0 0 3px rgba(65,118,230,.12)`）；角色标签 caption 灰
+  - 清理：修复过程中产生的重复 `.tree-label:hover`/`.recent:hover` 规则
+- **检查证据**：
+  - `pytest -q` → **84 passed**（复跑确认稳定，首次单跑疑为环境偶发）
+  - 冒烟：12 项色调/布局标记全部就位 + 重复规则计数 = 1；`node --check` 通过
+  - Node DOM 垫片回归（轨迹流 + 展开 + 统计行）→ **JSFLOW 7.4-UI2 回归 OK**
+- **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）

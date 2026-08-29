@@ -199,9 +199,18 @@
 
 ## AE. 迭代 7 切片 7.4 前端内联折叠轨迹块 + 结构化持久化
 
-- [ ] AE1 think 折叠块 + tool_call/tool_result 折叠行（✓/✗、耗时、展开参数与返回）
-- [ ] AE2 round_end 边界：工具轮叙述内容折入轨迹、最终答复留在气泡
-- [ ] AE3 会话持久化 messages + trace；旧数据兼容
+- [x] AE1 think 折叠块 + tool_call/tool_result 折叠行（✓/✗、耗时、展开参数与返回）
+- [x] AE2 round_end 边界：工具轮叙述内容折入轨迹、最终答复留在气泡
+- [x] AE3 会话持久化 messages + trace；旧数据兼容
+- [x] AE4 折叠展开修复：`style.display = 'block'`（空串回落 CSS display:none 导致展开为空的 bug）
+- [x] AE5 文案优化：叙事块 →「Model Assistant」、工具块 →「Tools」（工具名/参数/返回在展开内容）
+- [x] AE6 Tools 展开改原始格式：`tool: name` / `parameter: <原始 arguments JSON>` / `output: <观测>`（后端改发 `arguments_raw`；旧会话 args 字段兼容）
+- [x] AE7 轨迹不截断：`parameter` 全文原始 JSON；`output` 完整多行观测（模型上下文仍按 MAX_TOOL_TEXT 截断，互不影响）
+- [x] AE8 折叠行一行式：图标+标题+单行摘要+箭头（think 摘要=首行/流式最新行，tool 摘要=工具名+参数预览）
+- [x] AE9 展开正文卡片化（12px 圆角/浅边框/#f9fafb/等宽/260px 内滚）+ think 缩进文本 + 运行态扫光 + reduced-motion 降级 + 气泡 22px
+- [x] AE10 回合统计行（步数/工具耗时/tokens，turn_end 带 usage）+ 回放未闭合块兜底
+- [x] AE11 色调切换：冷调 bluish 中性 + DeepSeek 蓝 #4176e6（页面 #f5f6f7 / 近黑 #0f1115 / 三级灰 #81858c / 极浅边框 rgba(0,0,0,.04) / 代码底 #f9fafb / 状态色 #22c55e #ef4444）
+- [x] AE12 布局轻量化：极浅分隔、无边框轻按钮、1px 细分隔条（hover 蓝）、agent 答复纯文本化、输入框白底 16px 圆角 + 蓝色聚焦光晕
 
 ## AF. 迭代 7 切片 7.5 错误处理与状态指示
 

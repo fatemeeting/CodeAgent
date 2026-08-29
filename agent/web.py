@@ -30,53 +30,57 @@ INDEX_HTML = """<!DOCTYPE html>
 <title>编程智能体 · Coding Agent</title>
 <style>
   :root {
-    --bg: #f7f7f4; --surface: #ffffff; --border: #e5e4df;
-    --text: #26251e; --muted: #8a887e; --accent: #f54e00;
-    --accent-hover: #d94400; --code-bg: #fbfaf8; --ok: #2e7d32; --err: #c62828;
+    /* 色调模仿 DSH design-platform：冷调 bluish 中性 + DeepSeek 蓝 */
+    --bg: #f5f6f7; --surface: #ffffff; --border: #e6e8eb;
+    --border-l1: rgba(0, 0, 0, 0.04);
+    --text: #0f1115; --muted: #81858c; --caption: #adb0b5;
+    --accent: #4176e6; --accent-hover: #2f5fd0; --accent-soft: rgba(65, 118, 230, 0.08);
+    --code-bg: #f9fafb; --ok: #22c55e; --err: #ef4444; --warn: #f59e0b;
+    --tblk-ok: #22c55e; --tblk-err: #ef4444; /* 轨迹状态色（DSH 同款） */
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
   /* 工作区管理器（欢迎页整页 + 弹层复用同一卡片） */
   #welcome { flex: 1; min-height: 0; overflow: auto; display: flex; align-items: center; justify-content: center; padding: 24px; }
-  .mgr-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 40px 44px; width: 520px; max-width: 92vw; max-height: 92vh; overflow-y: auto; box-shadow: 0 2px 12px rgba(38,37,30,.06); display: flex; flex-direction: column; gap: 12px; }
+  .mgr-card { background: var(--surface); border: 1px solid var(--border-l1); border-radius: 16px; padding: 40px 44px; width: 520px; max-width: 92vw; max-height: 92vh; overflow-y: auto; box-shadow: 0 2px 12px rgba(38,37,30,.06); display: flex; flex-direction: column; gap: 12px; }
   .mgr-title { font-size: 28px; font-weight: 700; text-align: center; letter-spacing: -.5px; }
   .mgr-sub { color: var(--muted); text-align: center; margin-bottom: 8px; }
-  .btn { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 8px; padding: 10px 14px; cursor: pointer; font-size: 15px; }
+  .btn { border: 1px solid var(--border-l1); background: var(--surface); color: var(--text); border-radius: 8px; padding: 10px 14px; cursor: pointer; font-size: 15px; }
   .btn:hover { background: var(--code-bg); }
   .btn-accent { background: var(--accent); color: #fff; border: none; font-weight: 600; }
   .btn-accent:disabled { background: #e3cfc4; cursor: not-allowed; }
   .btn-accent:not(:disabled):hover { background: var(--accent-hover); }
   .mgr-divider { height: 1px; background: var(--border); margin: 4px 0; }
-  .mgr-path { padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; font-family: Consolas, monospace; width: 100%; }
+  .mgr-path { padding: 10px 12px; border: 1px solid var(--border-l1); border-radius: 8px; font-size: 14px; font-family: Consolas, monospace; width: 100%; }
   .mgr-status { font-size: 14px; min-height: 18px; color: var(--muted); }
   .mgr-status.ok { color: var(--ok); }
   .mgr-status.err { color: var(--err); }
   .mgr-recents-title { font-size: 14px; color: var(--muted); }
   .recent { padding: 8px 10px; border-radius: 8px; cursor: pointer; font-family: Consolas, monospace; font-size: 14px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-  .recent:hover { background: var(--code-bg); }
+  .recent:hover { background: var(--accent-soft); }
   .recent .path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
   .recent .del { color: var(--muted); font-weight: 700; padding: 0 4px; flex-shrink: 0; }
   .recent .del:hover { color: var(--err); }
   .mgr-cancel { border: none; background: none; color: var(--muted); cursor: pointer; font-size: 14px; padding: 6px; }
   /* 主布局骨架 */
   #main { display: none; flex: 1; min-height: 0; height: 100vh; height: 100dvh; flex-direction: column; overflow: hidden; }
-  #topbar { display: flex; flex-shrink: 0; align-items: center; gap: 12px; padding: 8px 16px; background: var(--surface); border-bottom: 1px solid var(--border); overflow: hidden; }
+  #topbar { display: flex; flex-shrink: 0; align-items: center; gap: 12px; padding: 8px 20px; background: var(--surface); border-bottom: 1px solid var(--border-l1); overflow: hidden; }
   .brand { font-weight: 700; font-size: 15px; letter-spacing: -.3px; white-space: nowrap; }
-  .ws-chip { margin-left: auto; display: flex; align-items: center; gap: 8px; font-family: Consolas, monospace; font-size: 14px; border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; background: var(--code-bg); max-width: 45vw; overflow: hidden; }
+  .ws-chip { margin-left: auto; display: flex; align-items: center; gap: 8px; font-family: Consolas, monospace; font-size: 14px; border: 1px solid var(--border-l1); border-radius: 8px; padding: 6px 12px; background: var(--bg); max-width: 45vw; overflow: hidden; }
   #ws-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ws-chip button { border: none; background: none; cursor: pointer; color: var(--accent); font-size: 14px; font-weight: 600; }
   /* 会话栏（迭代 7 · 7.2） */
   .sess-bar { display: flex; align-items: center; gap: 6px; }
-  .sess-bar select { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 8px; padding: 6px 8px; font-size: 14px; max-width: 240px; }
-  .sess-bar button { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 8px; padding: 8px 12px; cursor: pointer; font-size: 14px; line-height: 1; white-space: nowrap; }
-  .sess-bar button:hover { background: var(--code-bg); border-color: var(--accent); }
+  .sess-bar select { border: 1px solid var(--border-l1); background: var(--bg); color: var(--text); border-radius: 8px; padding: 6px 10px; font-size: 14px; max-width: 240px; }
+  .sess-bar button { border: none; background: var(--bg); color: var(--muted); border-radius: 8px; padding: 7px 12px; cursor: pointer; font-size: 14px; line-height: 1; white-space: nowrap; }
+  .sess-bar button:hover { background: var(--accent-soft); color: var(--accent); }
   #content { flex: 1; min-height: 0; height: 0; display: flex; overflow: hidden; }
   .pane { display: flex; flex-direction: column; overflow: hidden; min-height: 0; min-width: 0; }
   #pane-left { width: 240px; }
   #pane-center { flex: 1; min-width: 0; }
   #pane-right { width: 380px; }
-  .splitter { width: 4px; cursor: col-resize; background: var(--border); flex-shrink: 0; }
-  .splitter:hover { background: var(--accent); }
+  .splitter { width: 4px; cursor: col-resize; flex-shrink: 0; background: linear-gradient(90deg, transparent calc(50% - 0.5px), var(--border) calc(50% - 0.5px), var(--border) calc(50% + 0.5px), transparent calc(50% + 0.5px)); }
+  .splitter:hover { background: rgba(65, 118, 230, 0.25); }
   #editor-host { flex: 1; min-height: 0; }
   .placeholder { color: var(--muted); font-size: 15px; display: flex; align-items: center; justify-content: center; height: 100%; border: 1px dashed var(--border); border-radius: 12px; margin: 16px; }
   /* 对话区（右侧聊天面板） */
@@ -85,30 +89,54 @@ INDEX_HTML = """<!DOCTYPE html>
   .msg-col { display: flex; flex-direction: column; max-width: 85%; }
   .msg.user .msg-col { align-items: flex-end; }
   .msg.agent .msg-col { align-items: flex-start; }
-  .role-label { font-size: 12px; color: var(--muted); margin-bottom: 3px; }
-  #chat-inputbar { display: flex; flex-shrink: 0; gap: 10px; padding: 12px 16px 16px; background: var(--surface); border-top: 1px solid var(--border); align-items: flex-end; }
-  #chat-input { flex: 1; resize: none; height: 44px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 14px; font-size: 14px; font-family: inherit; background: var(--bg); color: var(--text); outline: none; }
-  #chat-input:focus { border-color: var(--accent); }
+  .role-label { font-size: 12px; color: var(--caption); margin-bottom: 4px; }
+  #chat-inputbar { display: flex; flex-shrink: 0; gap: 10px; padding: 12px 16px 16px; background: var(--surface); border-top: 1px solid var(--border-l1); align-items: flex-end; }
+  #chat-input { flex: 1; resize: none; height: 44px; padding: 10px 14px; border: 1px solid var(--border-l1); border-radius: 16px; font-size: 14px; font-family: inherit; background: var(--surface); color: var(--text); outline: none; }
+  #chat-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(65, 118, 230, 0.12); }
   .send-btn { padding: 10px 22px; background: var(--accent); color: #fff; border: none; border-radius: 999px; cursor: pointer; font-weight: 600; font-size: 14px; white-space: nowrap; }
   .send-btn:hover { background: var(--accent-hover); }
   .msg { display: flex; }
   .msg.user { justify-content: flex-end; }
   .bubble { max-width: 85%; padding: 8px 12px; border-radius: 12px; white-space: pre-wrap; word-break: break-word; font-size: 14px; line-height: 1.55; }
-  .msg.user .bubble { background: var(--accent); color: #fff; }
-  .msg.agent .bubble { background: var(--surface); border: 1px solid var(--border); font-family: Consolas, "Courier New", monospace; }
-  .tool { color: #b33a00; font-weight: 600; }
+  .msg.user .bubble { background: var(--accent); color: #fff; border-radius: 22px; padding: 10px 16px; }
+  .msg.agent .bubble { background: transparent; border: none; padding: 2px 0; line-height: 1.65; }
+  .tool { color: var(--accent-hover); font-weight: 600; }
   .obs { color: var(--ok); }
-  .bubble pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px; margin: 4px 0; overflow-x: auto; }
-  .bubble code.ic { background: var(--code-bg); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; font-size: 13px; }
+  .bubble pre { background: var(--code-bg); border: 1px solid var(--border-l1); border-radius: 6px; padding: 8px; margin: 4px 0; overflow-x: auto; }
+  .bubble code.ic { background: var(--code-bg); border: 1px solid var(--border-l1); border-radius: 4px; padding: 0 4px; font-size: 13px; }
   .bubble h1, .bubble h2, .bubble h3, .bubble h4 { margin: 6px 0 2px; font-size: 1.02em; }
   .bubble ul { margin: 2px 0; padding-left: 18px; }
   .bubble a { color: var(--accent); }
+  /* 轨迹折叠块（迭代 7 · 7.4-UI：模仿 DSH DisclosureRow） */
+  .trace { display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px; width: 100%; }
+  .tblk { font-size: 13px; }
+  .tblk-head { display: flex; align-items: center; gap: 6px; padding: 3px 6px; cursor: pointer; user-select: none; border-radius: 6px; }
+  .tblk-head:hover { background: rgba(0, 0, 0, 0.03); }
+  .tblk-icon { flex-shrink: 0; font-size: 13px; }
+  .tblk-title { font-weight: 400; flex-shrink: 0; }
+  .tblk-sep { flex: none; width: 2px; height: 2px; margin: 0 2px; border-radius: 1px; background: var(--muted); }
+  .tblk-summary { min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 13px; }
+  .tblk-meta { flex-shrink: 0; color: var(--muted); font-size: 12px; }
+  .tblk-arrow { flex-shrink: 0; color: var(--muted); }
+  /* 运行态扫光（DSH reasoning/command sweep） */
+  .tblk.running .tblk-head { position: relative; overflow: hidden; }
+  .tblk.running .tblk-head::after { content: ''; position: absolute; top: 0; bottom: 0; left: -300px; width: 300px; background: linear-gradient(90deg, transparent 0%, rgba(247, 247, 244, 0.9) 55%, transparent 100%); animation: tblk-sweep 2.6s ease-out infinite; pointer-events: none; }
+  @keyframes tblk-sweep { 0% { left: -300px; } 90%, 100% { left: 100%; } }
+  @media (prefers-reduced-motion: reduce) { .tblk.running .tblk-head::after { display: none; animation: none; } }
+  /* 展开正文：tool/note/err = 代码卡片；think = 标题下缩进文本 */
+  .tblk.tool .tblk-body, .tblk.note .tblk-body, .tblk.err .tblk-body { display: none; margin: 4px 0 4px 4px; padding: 12px 16px; max-height: 260px; overflow: auto; border: 1px solid rgba(0, 0, 0, 0.04); border-radius: 12px; background: #f9fafb; color: var(--text); font-family: Consolas, monospace; font-size: 12.5px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+  .tblk.think .tblk-body { display: none; padding: 4px 0 4px 22px; max-height: 260px; overflow: auto; color: var(--muted); font-size: 13px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+  .tblk.tool.ok .tblk-meta { color: var(--tblk-ok); }
+  .tblk.tool.err .tblk-meta, .tblk.err .tblk-title, .tblk.err .tblk-icon { color: var(--tblk-err); }
+  .tblk.note .tblk-body { color: var(--muted); }
+  /* 回合统计行（模仿 DSH StatsLine） */
+  .turn-stats { margin: 2px 0 6px; color: var(--muted); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   /* 文件页（右栏） */
   #file-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 12px 16px 8px; }
-  #file-tab { display: none; font-family: Consolas, monospace; font-size: 14px; font-weight: 600; background: var(--surface); border: 1px solid var(--border); border-radius: 6px 6px 0 0; padding: 6px 12px; }
-  #file-save { display: none; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 8px; padding: 6px 14px; cursor: pointer; font-size: 14px; font-weight: 600; }
+  #file-tab { display: none; font-family: Consolas, monospace; font-size: 14px; font-weight: 600; background: var(--surface); border: 1px solid var(--border-l1); border-radius: 6px 6px 0 0; padding: 6px 12px; }
+  #file-save { display: none; border: 1px solid var(--border-l1); background: var(--surface); color: var(--text); border-radius: 8px; padding: 6px 14px; cursor: pointer; font-size: 14px; font-weight: 600; }
   #file-save:hover { border-color: var(--accent); color: var(--accent); }
-  #file-view, .file-view { flex: 1; margin: 0 16px 16px; background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px; overflow: hidden; font-family: Consolas, monospace; font-size: 14px; line-height: 1.5; display: flex; flex-direction: row; }
+  #file-view, .file-view { flex: 1; margin: 0 16px 16px; background: var(--code-bg); border: 1px solid var(--border-l1); border-radius: 8px; padding: 12px; overflow: hidden; font-family: Consolas, monospace; font-size: 14px; line-height: 1.5; display: flex; flex-direction: row; }
   .fv-nums { width: 48px; flex-shrink: 0; overflow: hidden; color: var(--muted); text-align: right; padding-right: 12px; white-space: pre; user-select: none; }
   .fv-ta { flex: 1; border: none; outline: none; background: transparent; resize: none; font-family: Consolas, monospace; font-size: 14px; line-height: 1.5; color: var(--text); padding: 0 0 0 12px; overflow: auto; overscroll-behavior: contain; }
   /* 文件树（Editor 左栏） */
@@ -116,7 +144,7 @@ INDEX_HTML = """<!DOCTYPE html>
   #tree-root { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 4px 8px 16px; }
   .tree-node { font-size: 14px; }
   .tree-label { display: block; padding: 3px 6px; border-radius: 6px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .tree-label:hover { background: var(--code-bg); }
+  .tree-label:hover { background: var(--accent-soft); }
   .tree-label.file { font-family: Consolas, monospace; }
   .tree-kids { padding-left: 14px; }
   /* 弹层 */
@@ -347,7 +375,7 @@ async function switchSession(id) {
     state.workspace = s.workspace || state.workspace;
     localStorage.setItem('agent.workspace', state.workspace);
     document.getElementById('ws-name').textContent = state.workspace;
-    chatMessages = (s.messages || []).map(function (m) { return {role: m.role, raw: m.raw}; });
+    chatMessages = (s.messages || []).map(function (m) { return {role: m.role, raw: m.raw, trace: m.trace}; });
     buildChat('pane-right');
     loadTree();
     refreshFiles();
@@ -506,7 +534,7 @@ function buildChat(containerId) {
       <textarea id="chat-input" placeholder="输入编程任务，Enter 发送（Shift+Enter 换行）"></textarea>
       <button class="send-btn" onclick="sendTask()">发送</button>
     </div>`;
-  chatMessages.forEach(m => appendMsg(m.role, m.raw));
+  chatMessages.forEach(m => appendMsg(m.role, m.raw, m.trace));
   const h = document.getElementById('chat-history');
   h.scrollTop = h.scrollHeight;
   document.getElementById('chat-input').addEventListener('keydown', function (e) {
@@ -514,7 +542,7 @@ function buildChat(containerId) {
   });
 }
 
-function appendMsg(role, raw) {
+function appendMsg(role, raw, trace) {
   const history = document.getElementById('chat-history');
   const hint = history.querySelector('.chat-hint');
   if (hint) hint.remove();
@@ -526,6 +554,12 @@ function appendMsg(role, raw) {
   label.className = 'role-label';
   label.textContent = role === 'user' ? '你' : 'Agent';
   col.appendChild(label);
+  if (role === 'agent' && trace && trace.length) {
+    const traceEl = document.createElement('div');
+    traceEl.className = 'trace';
+    col.appendChild(traceEl);
+    renderTraceFromEvents(traceEl, trace);
+  }
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
   bubble._raw = raw;
@@ -535,6 +569,220 @@ function appendMsg(role, raw) {
   renderBubble(bubble);
   history.scrollTop = history.scrollHeight;
   return bubble;
+}
+
+function appendAgentMsg() {
+  const history = document.getElementById('chat-history');
+  const hint = history.querySelector('.chat-hint');
+  if (hint) hint.remove();
+  const wrap = document.createElement('div');
+  wrap.className = 'msg agent';
+  const col = document.createElement('div');
+  col.className = 'msg-col';
+  const label = document.createElement('div');
+  label.className = 'role-label';
+  label.textContent = 'Agent';
+  col.appendChild(label);
+  const traceEl = document.createElement('div');
+  traceEl.className = 'trace';
+  col.appendChild(traceEl);
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  col.appendChild(bubble);
+  wrap.appendChild(col);
+  history.appendChild(wrap);
+  history.scrollTop = history.scrollHeight;
+  return {bubble: bubble, traceEl: traceEl};
+}
+
+/* ---------- 轨迹折叠块（迭代 7 · 7.4-UI，模仿 DSH DisclosureRow） ---------- */
+function oneLine(s, n) {
+  const t = String(s || '').replace(/\\s+/g, ' ').trim();
+  return t.length > n ? t.slice(0, n) + '…' : t;
+}
+
+function latestLine(s) {
+  const v = String(s || '').trimEnd();
+  const i = v.lastIndexOf('\\n');
+  return i === -1 ? v : v.slice(i + 1);
+}
+
+function formatMs(ms) {
+  if (ms < 1000) return ms + 'ms';
+  const s = Math.round(ms / 100) / 10;
+  if (s < 60) return s + 's';
+  return Math.floor(s / 60) + 'm' + Math.round(s % 60) + 's';
+}
+
+function createTblk(traceEl, kind) {
+  const root = document.createElement('div');
+  root.className = 'tblk ' + kind;
+  const head = document.createElement('div');
+  head.className = 'tblk-head';
+  const icon = document.createElement('span');
+  icon.className = 'tblk-icon';
+  const title = document.createElement('span');
+  title.className = 'tblk-title';
+  const sep = document.createElement('span');
+  sep.className = 'tblk-sep';
+  const summary = document.createElement('span');
+  summary.className = 'tblk-summary';
+  const meta = document.createElement('span');
+  meta.className = 'tblk-meta';
+  const arrow = document.createElement('span');
+  arrow.className = 'tblk-arrow';
+  arrow.textContent = '▸';
+  const body = document.createElement('div');
+  body.className = 'tblk-body';
+  body.style.display = 'none';
+  head.appendChild(icon);
+  head.appendChild(title);
+  head.appendChild(sep);
+  head.appendChild(summary);
+  head.appendChild(meta);
+  head.appendChild(arrow);
+  head.onclick = function () {
+    const open = body.style.display === 'none';
+    body.style.display = open ? 'block' : 'none';
+    arrow.textContent = open ? '▾' : '▸';
+  };
+  root.appendChild(head);
+  root.appendChild(body);
+  traceEl.appendChild(root);
+  return {root: root, head: head, title: title, meta: meta, arrow: arrow, body: body, summary: summary};
+}
+
+function setBubbleRaw(bubble, raw) {
+  if (!bubble) return;
+  bubble._raw = raw;
+  renderBubble(bubble);
+}
+
+function newTurnState(bubble, traceEl) {
+  return {
+    bubble: bubble, traceEl: traceEl,
+    answerRaw: '', roundRaw: '', thinkRaw: '',
+    think: null, pendingTools: [], traceEvents: [],
+    steps: 0, toolMs: 0, statsEl: null,
+  };
+}
+
+function handleEvent(ev, t) {
+  t.traceEvents.push(ev);
+  switch (ev.type) {
+    case 'think_start':
+      t.think = createTblk(t.traceEl, 'think');
+      t.think.root.className = 'tblk think running';
+      t.think.icon = t.think.head.children[0];
+      t.think.icon.textContent = '🧠';
+      t.think.title.textContent = 'Think';
+      break;
+    case 'think_delta':
+      t.thinkRaw += ev.text;
+      if (t.think) {
+        t.think.body.textContent = t.thinkRaw;
+        t.think.summary.textContent = latestLine(t.thinkRaw);  // 流式跟随最新行
+        try { t.think.summary.scrollLeft = t.think.summary.scrollWidth - t.think.summary.clientWidth; } catch (e) { /* 忽略 */ }
+      }
+      break;
+    case 'think_end':
+      if (t.think) {
+        t.think.root.className = 'tblk think';
+        t.think.summary.textContent = oneLine(t.thinkRaw, 60);  // 完成态显示首行
+        t.think.meta.textContent = '(' + t.thinkRaw.length + ' 字)';
+        t.think = null;
+        t.thinkRaw = '';
+      }
+      break;
+    case 'content_delta':
+      t.roundRaw += ev.text;
+      setBubbleRaw(t.bubble, t.answerRaw + t.roundRaw);
+      break;
+    case 'round_end':
+      if (ev.has_tools) {
+        if (t.roundRaw.trim()) {
+          const nb = createTblk(t.traceEl, 'note');
+          nb.icon = nb.head.children[0];
+          nb.icon.textContent = '📝';
+          nb.title.textContent = 'Model Assistant';
+          nb.summary.textContent = oneLine(t.roundRaw, 60);
+          nb.body.textContent = t.roundRaw;
+        }
+        t.roundRaw = '';
+        setBubbleRaw(t.bubble, t.answerRaw);
+      } else {
+        t.answerRaw += t.roundRaw;
+        t.roundRaw = '';
+        setBubbleRaw(t.bubble, t.answerRaw);
+      }
+      break;
+    case 'tool_call': {
+      const tb = createTblk(t.traceEl, 'tool');
+      tb.root.className = 'tblk tool running';
+      tb.icon = tb.head.children[0];
+      tb.icon.textContent = '🔧';
+      tb.title.textContent = 'Tools';
+      tb.name = ev.name || '';
+      tb.args = ev.parameter !== undefined ? ev.parameter : (ev.args || '');  // 旧会话兼容
+      tb.summary.textContent = oneLine(tb.name + ' · ' + tb.args, 60);
+      tb.body.textContent = 'tool: ' + tb.name + '\\nparameter: ' + tb.args;
+      t.steps += 1;
+      t.pendingTools.push(tb);
+      break;
+    }
+    case 'tool_result': {
+      const tb = t.pendingTools.shift();
+      if (tb) {
+        tb.root.className = 'tblk tool ' + (ev.ok ? 'ok' : 'err');
+        tb.meta.textContent = '(' + formatMs(ev.duration_ms || 0) + ' ' + (ev.ok ? '✓' : '✗') + ')';
+        tb.body.textContent = 'tool: ' + (tb.name || ev.name || '') + '\\nparameter: ' + (tb.args || '') + '\\noutput: ' + (ev.output || '');
+        t.toolMs += ev.duration_ms || 0;
+      }
+      break;
+    }
+    case 'error': {
+      const eb = createTblk(t.traceEl, 'err');
+      eb.icon = eb.head.children[0];
+      eb.icon.textContent = '⚠️';
+      eb.title.textContent = ev.severity || 'error';
+      eb.summary.textContent = oneLine(ev.message || ev.text || '', 60);
+      eb.body.textContent = ev.message || ev.text || '';
+      break;
+    }
+    case 'turn_end': {
+      if (!t.answerRaw.trim() && !t.traceEvents.some(function (x) { return x.type === 'tool_result'; })) {
+        setBubbleRaw(t.bubble, '（无回复）');
+      }
+      const groups = [];
+      if (t.steps > 0) groups.push(t.steps + ' 步 · 工具 ' + formatMs(t.toolMs));
+      const usage = ev.usage;
+      if (usage && typeof usage.total_tokens === 'number' && usage.total_tokens > 0) {
+        groups.push(usage.total_tokens + ' tokens');
+      }
+      if (groups.length && !t.statsEl) {
+        t.statsEl = document.createElement('div');
+        t.statsEl.className = 'turn-stats';
+        t.statsEl.textContent = groups.join(' · ');
+        t.traceEl.appendChild(t.statsEl);
+      }
+      break;
+    }
+  }
+}
+
+function renderTraceFromEvents(traceEl, events) {
+  const t = newTurnState(null, traceEl);
+  events.forEach(function (ev) { handleEvent(ev, t); });
+  // 回放兜底：未闭合的 running 块收尾标记
+  if (t.think) {
+    t.think.root.className = 'tblk think';
+    t.think.summary.textContent = oneLine(t.thinkRaw, 60);
+    t.think.meta.textContent = '(' + t.thinkRaw.length + ' 字)';
+  }
+  t.pendingTools.forEach(function (tb) {
+    tb.root.className = 'tblk tool err';
+    tb.meta.textContent = '（未完成）';
+  });
 }
 
 function renderBubble(bubble) {
@@ -642,25 +890,25 @@ async function sendTask() {
   chatMessages.push({role: 'user', raw: task});
   appendMsg('user', task);
   chatMessages.push({role: 'agent', raw: ''});
-  const bubble = appendMsg('agent', '');
+  const agent = appendAgentMsg();
   const idx = chatMessages.length - 1;
   await ensureSession(task);
   saveMessages();
   const es = new EventSource('/events?task=' + encodeURIComponent(task) + '&workdir=' + encodeURIComponent(state.workspace));
+  const t = newTurnState(agent.bubble, agent.traceEl);
   es.onmessage = function (e) {
     if (e.data === '[DONE]') {
       es.close();
-      chatMessages[idx].raw += '\\n✓ 完成';
-      bubble._raw = chatMessages[idx].raw;
-      renderBubble(bubble);
+      chatMessages[idx].raw = t.answerRaw;
+      chatMessages[idx].trace = t.traceEvents;
       refreshFiles();
       saveMessages();
       if (firstTask) { autoRenameSession(firstTask); firstTask = null; }
       return;
     }
-    chatMessages[idx].raw += JSON.parse(e.data).text;
-    bubble._raw = chatMessages[idx].raw;
-    renderBubble(bubble);
+    let ev;
+    try { ev = JSON.parse(e.data); } catch (err) { return; }
+    handleEvent(ev, t);
     const h = document.getElementById('chat-history');
     h.scrollTop = h.scrollHeight;
   };

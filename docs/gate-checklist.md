@@ -1,22 +1,21 @@
-# gate-checklist.md — 迭代 7 · 切片 7.3 放行清单
+# gate-checklist.md — 迭代 7 · 切片 7.4-UI2 放行清单
 
-> 当前阶段：迭代 7 · 切片 7.3（事件化后端）。放行决定：通过 / 重试 / 降级 / 停止。
+> 当前阶段：迭代 7 · 切片 7.4-UI2（整体色调与布局细节）。放行决定：通过 / 重试 / 降级 / 停止。
 
 ## 必过项
 
-- [x] `loop.py` emit 回调产出完整事件序列（turn_start → … → turn_end）；emit=None 时 CLI print 行为与改前一致（回归测试）
-- [x] `llm.py` 流式捕获 reasoning_content（on_reasoning/on_content 回调，回调模式下不打印）；非流式挂载 response.reasoning
-- [x] `config.py` `DEEPSEEK_THINK=1` → model=deepseek-reasoner；显式 DEEPSEEK_MODEL 优先
-- [x] `web.py /events` 事件帧（type+text，content_delta 携带正文）；增量流式测试 + 事件序列测试通过
-- [x] `pytest -q` 全绿（83）；真实服务冒烟；openai 3.x reasoning_content 透传内省
+- [x] 色调令牌切换：`--bg #f5f6f7`、`--text #0f1115`、`--muted #81858c`、`--accent #4176e6`、`--code-bg #f9fafb`、状态色 #22c55e/#ef4444
+- [x] 极浅边框与轻量组件：topbar/inputbar 用 rgba(0,0,0,.04)；会话按钮无边框轻按钮；分隔条 1px 细线 hover 蓝
+- [x] 对话质感：agent 气泡去框纯文本；输入框白底 16px 圆角 + 蓝色聚焦光晕；角色标签 caption 灰
+- [x] `pytest -q` 全绿（84）；`node --check`；冒烟标记；DOM 垫片回归
 
 ## 证据位置
 
-- 检查证据：见 `docs/AGENT_LOG.md` 迭代 7 切片 7.3 条目
-- 代码：`agent/llm.py`、`agent/loop.py`、`agent/config.py`、`agent/web.py`、`.env.example`
+- 检查证据：见 `docs/AGENT_LOG.md` 迭代 7 切片 7.4-UI2 条目
+- 代码：`agent/web.py`
 
 ## 退出决定
 
-- 通过 → 切片 7.4（前端内联折叠轨迹块 + 结构化持久化）
+- 通过 → 切片 7.5（错误处理与状态指示）
 - 重试 → 补齐缺失项后复查
 - 停止 → 记录原因

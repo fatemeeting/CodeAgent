@@ -141,10 +141,13 @@ def test_run_emits_event_stream(tmp_path):
         out = run(_stream_config(), "创建 a.txt", workdir=str(tmp_path), emit=events.append)
     types = [e["type"] for e in events]
     assert types[0] == "turn_start" and types[-1] == "turn_end"
+    assert "usage" in events[-1]  # turn_end 携带 token 用量
     for t in ("tool_call", "tool_result", "round_end", "content_delta"):
         assert t in types, types
     tr = next(e for e in events if e["type"] == "tool_result")
     assert tr["name"] == "write_file" and tr["ok"] is True and tr["duration_ms"] >= 0
+    tc_ev = next(e for e in events if e["type"] == "tool_call")
+    assert tc_ev["parameter"] == '{"path": "a.txt", "content": "hi"}'  # 原始 arguments JSON
     # 非正文事件 text 为空，不污染旧前端对话
     assert all(e.get("text", "") == "" for e in events if e["type"] not in ("content_delta", "error"))
     assert out == "已创建 a.txt"
@@ -174,6 +177,30 @@ def test_run_emits_think_events():
         "turn_end",
     ]
     assert events[2]["text"] == "先想"
+
+
+def test_run_emits_untruncated_tool_output(tmp_path):
+    """轨迹 tool_result.output 为完整观测（不截断、不折叠），模型上下文仍按 MAX_TOOL_TEXT 截断。"""
+    responses = [_response(content=None, tool_calls=[_tool_call()]), _response(content="完成")]
+    client = mock.Mock()
+
+    def chat_stream(messages, tools=None, on_content=None, on_reasoning=None):
+        resp = responses.pop(0)
+        content = resp.choices[0].message.content
+        if on_content and content:
+            on_content(content)
+        return resp
+
+    client.chat_stream.side_effect = chat_stream
+    big = "观察行1\n观察行2\n" * 1500  # 15000 字符 > MAX_TOOL_TEXT
+    events = []
+    with mock.patch("agent.loop.LLMClient", return_value=client), mock.patch(
+        "agent.loop.dispatch", return_value=big
+    ):
+        run(_stream_config(), "任务", workdir=str(tmp_path), emit=events.append)
+    tr = next(e for e in events if e["type"] == "tool_result")
+    assert tr["output"] == big  # 完整多行观测，无截断
+    assert "…" not in tr["output"]
 
 
 def _reflect_config(max_iterations=5):

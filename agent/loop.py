@@ -172,7 +172,7 @@ def run_turn(
         messages.append(_assistant_message(parsed))
         for tc in parsed.tool_calls:
             if emit:
-                emit(_event("tool_call", step=step, name=tc.name, args=_brief(tc.arguments, 150)))
+                emit(_event("tool_call", step=step, name=tc.name, parameter=tc.arguments_raw or ""))
             else:
                 _log_tool_call(step, tc.name, tc.arguments)
 
@@ -196,18 +196,16 @@ def run_turn(
             observations[i] = obs
 
         for i, (tc, observation) in enumerate(zip(parsed.tool_calls, observations)):
+            full_obs = observation  # 轨迹用完整观测（不截断）
             if len(observation) > MAX_TOOL_TEXT:
                 observation = observation[:MAX_TOOL_TEXT] + "\n...（观测过长已截断）"
             if emit:
-                collapsed = " | ".join(
-                    line.strip() for line in observation.splitlines() if line.strip()
-                )
                 emit(_event(
                     "tool_result",
                     step=step,
                     name=tc.name,
-                    ok=not observation.startswith("错误"),
-                    output=_brief(collapsed, 200),
+                    ok=not full_obs.startswith("错误"),
+                    output=full_obs,
                     duration_ms=durations.get(i, 0),
                 ))
             else:
@@ -246,4 +244,13 @@ def run(
         return run_turn(client, config, messages, tool_schemas(), workdir, emit)
     finally:
         if emit:
-            emit(_event("turn_end"))
+            usage: dict[str, Any] = {}
+            getter = getattr(client, "usage_summary", None)
+            if callable(getter):
+                try:
+                    raw = getter()
+                    if isinstance(raw, dict):
+                        usage = {str(k): int(v) for k, v in raw.items() if isinstance(v, int)}
+                except Exception:  # noqa: BLE001 - 统计失败不影响主流程
+                    usage = {}
+            emit(_event("turn_end", usage=usage))
