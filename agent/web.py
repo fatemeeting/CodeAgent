@@ -60,24 +60,17 @@ INDEX_HTML = """<!DOCTYPE html>
   #main { display: none; flex: 1; flex-direction: column; }
   #topbar { display: flex; align-items: center; gap: 12px; padding: 8px 16px; background: var(--surface); border-bottom: 1px solid var(--border); }
   .brand { font-weight: 700; font-size: 14px; letter-spacing: -.3px; }
-  .mode-switch { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
-  .mode-switch button { padding: 7px 16px; border: none; background: var(--surface); cursor: pointer; font-size: 13px; color: var(--muted); }
-  .mode-switch button.active { background: var(--accent); color: #fff; font-weight: 600; }
   .ws-chip { margin-left: auto; display: flex; align-items: center; gap: 8px; font-family: Consolas, monospace; font-size: 13px; border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; background: var(--code-bg); }
   .ws-chip button { border: none; background: none; cursor: pointer; color: var(--accent); font-size: 13px; font-weight: 600; }
   #content { flex: 1; display: flex; min-height: 0; }
   .pane { display: flex; flex-direction: column; overflow: hidden; }
-  body.agent #pane-left { width: 42%; border-right: 1px solid var(--border); }
-  body.agent #pane-right { flex: 1; }
-  #pane-center { flex: 1; display: none; }
-  body.editor #pane-left { width: 18%; border-right: 1px solid var(--border); }
-  body.editor #pane-center { display: flex; }
-  body.editor #pane-right { width: 30%; border-left: 1px solid var(--border); }
-  #terminal-panel { display: none; }
-  body.editor #terminal-panel { display: flex; flex-direction: column; height: 180px; border-top: 1px solid var(--border); background: var(--surface); }
+  #pane-left { width: 18%; border-right: 1px solid var(--border); }
+  #pane-center { flex: 1; }
+  #pane-right { width: 30%; border-left: 1px solid var(--border); }
+  #terminal-panel { display: flex; flex-direction: column; height: 180px; border-top: 1px solid var(--border); background: var(--surface); }
   #editor-host { flex: 1; min-height: 0; }
   .placeholder { color: var(--muted); font-size: 14px; display: flex; align-items: center; justify-content: center; height: 100%; border: 1px dashed var(--border); border-radius: 12px; margin: 16px; }
-  /* 对话区（Agent Window 左栏） */
+  /* 对话区（右侧聊天面板） */
   #chat-history { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
   #chat-inputbar { display: flex; gap: 8px; padding: 12px 16px; background: var(--surface); border-top: 1px solid var(--border); }
   #chat-input { flex: 1; resize: none; height: 44px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; background: var(--bg); color: var(--text); }
@@ -95,8 +88,7 @@ INDEX_HTML = """<!DOCTYPE html>
   .bubble a { color: var(--accent); }
   /* 文件页（右栏） */
   #file-header { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 12px 16px 8px; }
-  #file-tab { font-family: Consolas, monospace; font-size: 13px; font-weight: 600; background: var(--surface); border: 1px solid var(--border); border-radius: 6px 6px 0 0; padding: 6px 12px; }
-  #file-select { font-size: 12px; border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; background: var(--surface); color: var(--text); }
+  #file-tab { display: none; font-family: Consolas, monospace; font-size: 13px; font-weight: 600; background: var(--surface); border: 1px solid var(--border); border-radius: 6px 6px 0 0; padding: 6px 12px; }
   #file-view, .file-view { flex: 1; margin: 0 16px 16px; background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px; overflow: auto; font-family: Consolas, monospace; font-size: 13px; line-height: 1.5; }
   #file-view .ln, .file-view .ln { display: inline-block; width: 40px; color: var(--muted); text-align: right; margin-right: 12px; user-select: none; }
   /* 文件树（Editor 左栏） */
@@ -134,10 +126,6 @@ INDEX_HTML = """<!DOCTYPE html>
 <div id="main">
   <div id="topbar">
     <span class="brand">🤖 编程智能体</span>
-    <div class="mode-switch">
-      <button id="mode-agent" class="active" onclick="setMode('agent')">Agent Window</button>
-      <button id="mode-editor" onclick="setMode('editor')">Editor Window</button>
-    </div>
     <div class="ws-chip">
       <span id="ws-name"></span>
       <button onclick="openManager()" title="切换工作区">🔄 切换</button>
@@ -255,7 +243,7 @@ function enterMain() {
   document.getElementById('welcome').style.display = 'none';
   document.getElementById('main').style.display = 'flex';
   document.getElementById('ws-name').textContent = state.workspace;
-  setMode('agent');
+  buildLayout();
   closeManager();
 }
 
@@ -272,19 +260,11 @@ function closeManager() {
 let chatMessages = [];
 let editor = null;
 
-function setMode(mode) {
-  document.body.className = mode;
-  document.getElementById('mode-agent').classList.toggle('active', mode === 'agent');
-  document.getElementById('mode-editor').classList.toggle('active', mode === 'editor');
-  if (mode === 'agent') {
-    buildChat('pane-left');
-    buildAgentRight();
-  } else {
-    buildFileTree();
-    buildEditor();
-    buildChat('pane-right');
-    buildTerminal();
-  }
+function buildLayout() {
+  buildFileTree();
+  buildEditor();
+  buildChat('pane-right');
+  buildTerminal();
 }
 
 /* ---------- 对话（Agent 左栏 / Editor 右栏复用；状态存 chatMessages 重放） ---------- */
@@ -442,23 +422,13 @@ function sendTask() {
   es.onerror = function () { es.close(); };
 }
 
-/* ---------- 文件页（Agent 右栏 / Editor 中栏复用） ---------- */
-function buildAgentRight() {
-  document.getElementById('pane-right').innerHTML = `
-    <div id="file-header">
-      <select id="file-select" onchange="loadFile(this.value)"></select>
-      <span id="file-tab">—</span>
-    </div>
-    <div id="file-view"><div class="placeholder">任务完成后这里展示代码文件</div></div>`;
-}
-
+/* ---------- 中央编辑器（Monaco，CDN；离线回退行号视图） ---------- */
 function buildEditor() {
   document.getElementById('pane-center').innerHTML = `
     <div id="file-header">
-      <select id="file-select" onchange="loadFile(this.value)"></select>
       <span id="file-tab">—</span>
     </div>
-    <div id="editor-host"></div>`;
+    <div id="editor-host"><div class="placeholder">点击左侧文件树查看代码</div></div>`;
   ensureMonaco(function () {
     if (window.monaco) {
       editor = monaco.editor.create(document.getElementById('editor-host'), {
@@ -470,7 +440,9 @@ function buildEditor() {
         minimap: { enabled: false },
       });
     } else {
-      document.getElementById('editor-host').className = 'file-view';
+      const host = document.getElementById('editor-host');
+      host.className = 'file-view';
+      host.innerHTML = '';
     }
   });
 }
@@ -498,16 +470,6 @@ async function refreshFiles() {
     const data = await resp.json();
     if (!data.ok) return;
     const files = data.tree.filter(e => e.type === 'file');
-    const sel = document.getElementById('file-select');
-    if (sel) {
-      sel.innerHTML = '';
-      files.forEach(f => {
-        const opt = document.createElement('option');
-        opt.value = f.name;
-        opt.textContent = f.name;
-        sel.appendChild(opt);
-      });
-    }
     if (document.getElementById('tree-root')) loadTree();
     files.sort((a, b) => (b.mtime || 0) - (a.mtime || 0));
     if (files.length) loadFile(files[0].name);
@@ -518,9 +480,9 @@ async function loadFile(name) {
   try {
     const resp = await fetch('/file?workdir=' + encodeURIComponent(state.workspace) + '&path=' + encodeURIComponent(name));
     const data = await resp.json();
+    const tab = document.getElementById('file-tab');
     if (data.ok) {
-      const tab = document.getElementById('file-tab');
-      if (tab) tab.textContent = data.name;
+      if (tab) { tab.textContent = data.name; tab.style.display = ''; }
       if (editor) {
         editor.setValue(data.content);
         monaco.editor.setModelLanguage(editor.getModel(), langOf(data.name));
@@ -528,17 +490,18 @@ async function loadFile(name) {
         renderFile(data.content);
       }
     } else {
-      const view = document.getElementById('file-view') || document.getElementById('editor-host');
+      if (tab) tab.style.display = 'none';
+      const view = document.getElementById('editor-host');
       if (view) view.innerHTML = '<div class="placeholder">' + (data.error || '加载失败') + '</div>';
     }
   } catch (e) {
-    const view = document.getElementById('file-view') || document.getElementById('editor-host');
+    const view = document.getElementById('editor-host');
     if (view) view.innerHTML = '<div class="placeholder">请求失败</div>';
   }
 }
 
 function renderFile(content) {
-  const view = document.getElementById('file-view') || document.getElementById('editor-host');
+  const view = document.getElementById('editor-host');
   if (!view) return;
   view.innerHTML = '';
   content.split('\\n').forEach(function (line, i) {

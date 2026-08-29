@@ -366,3 +366,15 @@
   - `pytest -q` → **65 passed**
   - 冒烟：页面含渲染器与样式标记；真实任务 `calc68.py` 内容纯净（无 ```/无 **/无 #），最终答复含 md 标记（前端将渲染）
 - **人工放行决定**：（待用户确认：通过 / 重试 / 降级 / 停止）
+
+## 迭代 6 v2 布局精简
+
+- **时间**：2026-08-28
+- **问题**：① Agent Window 模式冗余；② 文件头上同时有下拉框 + 文件名 tab，未点文件时也显示「—」
+- **修复**：
+  - `agent/web.py`：删除模式切换按钮与 `setMode`（改为单一 `buildLayout`：文件树 | Monaco | 聊天 | 终端）；删除 `#file-select` 下拉框（文件切换走左侧文件树）；`#file-tab` 默认 `display:none`，`loadFile` 成功后才显示文件名；清理残留 CSS/注释
+  - `SPEC.md` 增补 6 同步为 Editor Window 单模式
+- **检查证据**：
+  - `pytest -q` → **65 passed**
+  - 冒烟（重启服务后）：`Agent Window`/`file-select`/`mode-switch` 均 0 次；tab 隐藏样式与 `buildLayout` 就位
+- **人工放行决定**：（待用户确认：通过 / 重试 / 降级 / 停止）

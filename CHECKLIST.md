@@ -123,3 +123,8 @@
 
 - [x] Q1 对话窗口渲染 Markdown（代码块/行内代码/粗体/标题/列表，零依赖）
 - [x] Q2 SYSTEM_PROMPT 禁止把 Markdown 标记写进代码文件
+
+## R. 迭代 6 v2 布局精简
+
+- [x] R1 删除 Agent Window 与模式切换（仅 Editor Window）
+- [x] R2 文件头删除下拉框；文件名 tab 未点文件时隐藏
