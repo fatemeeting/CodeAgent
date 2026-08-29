@@ -81,3 +81,41 @@ def test_chat_stream_reconstructs_response(capsys):
     parsed = parse_response(resp)
     assert parsed.content == "你好"
     assert capsys.readouterr().out == "你好\n"  # 逐 token 打印 + 换行
+
+
+def _reasoning_chunks():
+    def mk(content=None, reasoning=None):
+        return mock.Mock(
+            usage=None,
+            choices=[mock.Mock(delta=mock.Mock(content=content, reasoning_content=reasoning, tool_calls=None))],
+        )
+
+    return [mk(reasoning="先思考"), mk(reasoning="一下"), mk(content="好")]
+
+
+def test_chat_stream_captures_reasoning(capsys):
+    client = LLMClient(_config())
+    reasoning_cb = []
+    content_cb = []
+    with mock.patch.object(
+        client._client.chat.completions, "create", return_value=iter(_reasoning_chunks())
+    ):
+        resp = client.chat_stream(
+            [{"role": "user", "content": "x"}],
+            on_reasoning=reasoning_cb.append,
+            on_content=content_cb.append,
+        )
+    assert resp.reasoning == "先思考一下"
+    assert reasoning_cb == ["先思考", "一下"]
+    assert content_cb == ["好"]
+    assert capsys.readouterr().out == ""  # 回调模式下不打印
+
+
+def test_chat_attaches_reasoning_content():
+    client = LLMClient(_config())
+    fake_resp = mock.Mock(
+        choices=[mock.Mock(message=mock.Mock(content="hi", reasoning_content="深度思考"))]
+    )
+    with mock.patch.object(client._client.chat.completions, "create", return_value=fake_resp):
+        resp = client.chat([{"role": "user", "content": "x"}])
+    assert resp.reasoning == "深度思考"

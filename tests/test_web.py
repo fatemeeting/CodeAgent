@@ -134,9 +134,9 @@ def test_web_sse_stream():
     port = server.server_address[1]
     client = mock.Mock()
 
-    def chat_stream(messages, tools=None):
-        print("完成", end="", flush=True)
-        print()
+    def chat_stream(messages, tools=None, on_content=None, on_reasoning=None):
+        if on_content:
+            on_content("完成")
         return _response("完成")
 
     client.chat_stream = mock.Mock(side_effect=chat_stream)
@@ -148,12 +148,13 @@ def test_web_sse_stream():
         server.shutdown()
         server.server_close()
     assert "data:" in raw
+    assert '"type": "content_delta"' in raw
     assert "完成" in raw
     assert "[DONE]" in raw
 
 
 def test_web_sse_streams_incrementally():
-    """配置 stream=False 时 Web 仍逐块推送（强制流式）。"""
+    """配置 stream=False 时 Web 仍逐块推送事件帧（强制流式 + think 事件）。"""
     import time as _time
 
     server = ThreadingHTTPServer(("127.0.0.1", 0), AgentHandler)
@@ -164,11 +165,13 @@ def test_web_sse_streams_incrementally():
     port = server.server_address[1]
     client = mock.Mock()
 
-    def chat_stream(messages, tools=None):
+    def chat_stream(messages, tools=None, on_content=None, on_reasoning=None):
+        if on_reasoning:
+            on_reasoning("想一下")
         for piece in ["你", "好", "，", "世界"]:
-            print(piece, end="", flush=True)
+            if on_content:
+                on_content(piece)
             _time.sleep(0.05)
-        print()
         return _response("你好，世界")
 
     client.chat_stream = mock.Mock(side_effect=chat_stream)
@@ -184,9 +187,12 @@ def test_web_sse_streams_incrementally():
         server.shutdown()
         server.server_close()
     assert frames[-1] == "[DONE]"
-    chunks = [json.loads(f)["text"] for f in frames[:-1]]
-    chunks = [c for c in chunks if c.strip()]  # 过滤补换行空帧
+    events = [json.loads(f) for f in frames[:-1]]
+    chunks = [e["text"] for e in events if e["type"] == "content_delta"]
     assert chunks == ["你", "好", "，", "世界"], chunks  # 逐块到达、顺序一致
+    think = [e for e in events if e["type"] == "think_delta"]
+    assert think and think[0]["text"] == "想一下"
+    assert any(e["type"] == "round_end" for e in events)
 
 
 def test_web_tree(tmp_path):

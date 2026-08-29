@@ -151,3 +151,15 @@ coding-agent/
 ## 19. 迭代 7 · 切片 7.2 体验修复 6（步骤观测乱码）
 
 1. **命令输出编码回退**：`execute_command` 改为字节捕获 + `_decode` 回退链（UTF-8 优先 → 系统本地编码如 CP936/GBK → 容错替换）——Python 子进程输出 UTF-8，cmd 内置命令按控制台代码页输出，按单一 UTF-8 解码会产生乱码。
+
+## 20. 迭代 7 轨迹可视化（切片 7.3–7.6）
+
+> 决策（已与用户确认）：轨迹展示先用**内联折叠块**（Claude Code transcript 风格），「对话 | 轨迹」Tab 全景视图后置迭代 8；think 通过 `.env` 新增 `DEEPSEEK_THINK` 一键切换 `deepseek-reasoner`（显式 `DEEPSEEK_MODEL` 优先）。
+
+1. **架构：类型化事件流替代文本日志**。`loop.py` 增加可选 `emit(event)` 回调（默认 None → CLI/REPL print 路径零回归）；事件类型：`turn_start / think_start / think_delta / think_end / content_delta / round_end{has_tools} / tool_call / tool_result / error / turn_end`；所有事件带 `text` 兜底字段（仅 content_delta 携带正文，旧前端继续流式工作）。
+2. **think 捕获**：`llm.py` 流式收集 `delta.reasoning_content`（`on_reasoning` 回调）与非流式挂载 `response.reasoning`（7.3 首项内省 openai 3.x 字段透传，不透传则回退原始解析）；`deepseek-chat` 无该字段时自然降级。
+3. **切片 7.3 事件化后端**：上述 emit/回调/`DEEPSEEK_THINK` 配置 + `web.py /events` 发事件帧（stdout 兜底静默，防双通道重复）+ 测试（事件序列 / think / 增量流式 / CLI 回归）。
+4. **切片 7.4 前端内联折叠轨迹块**：think 折叠块、tool 折叠行（✓/✗、耗时、展开参数与返回摘要）；`round_end` 边界——工具轮叙述内容折入轨迹、最终答复留在气泡；会话持久化 messages + trace（旧数据兼容）。
+5. **切片 7.5 错误处理与状态指示**：error 事件（severity/retryable）、LLM 重试可见化、SSE 断线「连接中断 + 重新连接」、非零退出码/超时染色、回合状态指示（thinking→tool→answering→done）。
+6. **切片 7.6 集成回归**：真实任务冒烟（正常 + 错误路径）、CLI/REPL/会话/保存/滚动回归、证据入 AGENT_LOG。
+7. **非目标（迭代 8）**：对话/轨迹 Tab 分栏、轨迹导出、跨会话检索、结构化错误驱动的自动恢复闭环。

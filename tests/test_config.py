@@ -41,3 +41,23 @@ def test_config_requires_api_key(monkeypatch):
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
     with pytest.raises(RuntimeError):
         Config.from_env()
+
+
+def test_config_think_switch(monkeypatch):
+    monkeypatch.setattr("agent.config.load_dotenv", lambda *a, **k: None)
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "k")
+    monkeypatch.delenv("DEEPSEEK_MODEL", raising=False)
+    monkeypatch.setenv("DEEPSEEK_THINK", "1")
+    c = Config.from_env()
+    assert c.think is True
+    assert c.model == "deepseek-reasoner"
+
+
+def test_config_explicit_model_wins_over_think(monkeypatch):
+    monkeypatch.setattr("agent.config.load_dotenv", lambda *a, **k: None)
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "k")
+    monkeypatch.setenv("DEEPSEEK_MODEL", "deepseek-chat")
+    monkeypatch.setenv("DEEPSEEK_THINK", "true")
+    c = Config.from_env()
+    assert c.think is True
+    assert c.model == "deepseek-chat"  # 显式模型优先

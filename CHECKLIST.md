@@ -189,3 +189,28 @@
 
 - [x] AC1 `execute_command` 字节捕获 + `_decode` 编码回退链（UTF-8 → 本地编码 → GBK → 容错）
 - [x] AC2 测试覆盖：UTF-8 / GBK 回退 / 显式列表 / 全失败容错；真实命令冒烟
+
+## AD. 迭代 7 切片 7.3 事件化后端（轨迹可视化基础）
+
+- [x] AD1 `loop.py` emit 回调：turn_start/think_*/content_delta/round_end/tool_call/tool_result/error/turn_end 事件（emit=None 时 CLI print 零回归）
+- [x] AD2 `llm.py` 捕获 reasoning_content（流式 on_reasoning/on_content 回调 + 非流式挂载 response.reasoning）
+- [x] AD3 `config.py` `DEEPSEEK_THINK` 开关：开启切 deepseek-reasoner（显式 DEEPSEEK_MODEL 优先）；`.env.example` 同步
+- [x] AD4 `web.py /events` 事件帧（type+text，旧前端兼容）；测试更新（事件序列/think/增量流式）
+
+## AE. 迭代 7 切片 7.4 前端内联折叠轨迹块 + 结构化持久化
+
+- [ ] AE1 think 折叠块 + tool_call/tool_result 折叠行（✓/✗、耗时、展开参数与返回）
+- [ ] AE2 round_end 边界：工具轮叙述内容折入轨迹、最终答复留在气泡
+- [ ] AE3 会话持久化 messages + trace；旧数据兼容
+
+## AF. 迭代 7 切片 7.5 错误处理与状态指示
+
+- [ ] AF1 error 事件（severity/retryable）与 LLM 重试可见化
+- [ ] AF2 SSE 断线「连接中断 + 重新连接」
+- [ ] AF3 非零退出码/超时染色；参数解析失败事件化；回合状态指示
+
+## AG. 迭代 7 切片 7.6 集成回归
+
+- [ ] AG1 真实任务冒烟 ×2（正常 + 错误路径）
+- [ ] AG2 CLI/REPL/会话/保存/滚动旧功能回归
+- [ ] AG3 证据入 AGENT_LOG，CHECKLIST 迭代 7 全勾选放行

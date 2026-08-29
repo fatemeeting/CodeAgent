@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any
+from typing import Any, Callable
 
 from .config import Config
 from .context import truncate_history
@@ -38,6 +39,12 @@ def _brief(text: Any, limit: int) -> str:
     return s[:limit] + "…"
 
 
+def _event(kind: str, **fields: Any) -> dict[str, Any]:
+    """构造轨迹事件：统一带 text 兜底字段（旧前端只读 text，非正文事件不污染对话）。"""
+    fields.setdefault("text", "")
+    return {"type": kind, **fields}
+
+
 def _log_tool_call(step: int, name: str, arguments: dict[str, Any]) -> None:
     """打印工具调用（过程日志与最终答案都走 stdout，最终答案在最后一行）。"""
     print(f"[步骤 {step}] 调用工具 {name}：{_brief(arguments, 150)}")
@@ -70,13 +77,20 @@ def _safe_dispatch(name: str, arguments: dict[str, Any], workdir: str) -> str:
         return f"错误：工具 {name} 执行异常：{exc}"
 
 
-def _execute_tool_calls(tool_calls: list[Any], workdir: str) -> list[str]:
-    """并行执行多个工具调用（API 契约：同批 tool_calls 相互独立）；返回按序观测。"""
+def _timed_dispatch(name: str, arguments: dict[str, Any], workdir: str) -> tuple[str, int]:
+    """执行单个工具并计时，返回 (观测, 耗时毫秒)。"""
+    t0 = time.time()
+    obs = _safe_dispatch(name, arguments, workdir)
+    return obs, int((time.time() - t0) * 1000)
+
+
+def _execute_tool_calls(tool_calls: list[Any], workdir: str) -> list[tuple[str, int]]:
+    """并行执行多个工具调用（API 契约：同批 tool_calls 相互独立）；返回按序 (观测, 耗时)。"""
     if len(tool_calls) == 1:
-        return [_safe_dispatch(tool_calls[0].name, tool_calls[0].arguments, workdir)]
+        return [_timed_dispatch(tool_calls[0].name, tool_calls[0].arguments, workdir)]
     with ThreadPoolExecutor(max_workers=len(tool_calls)) as pool:
         futures = [
-            pool.submit(_safe_dispatch, tc.name, tc.arguments, workdir) for tc in tool_calls
+            pool.submit(_timed_dispatch, tc.name, tc.arguments, workdir) for tc in tool_calls
         ]
         return [f.result() for f in futures]
 
@@ -96,17 +110,49 @@ def run_turn(
     messages: list[dict[str, Any]],
     tools: list[dict[str, Any]],
     workdir: str,
+    emit: Callable[[dict[str, Any]], None] | None = None,
 ) -> str:
-    """在给定历史 messages 上执行一轮工具循环；原地更新 messages，返回最终文本。"""
+    """在给定历史 messages 上执行一轮工具循环；原地更新 messages，返回最终文本。
+
+    emit 为轨迹事件回调（Web 事件流用）；为 None 时保持 CLI 的 stdout 打印行为。
+    """
     reflected = False
     pending_final: str | None = None
     for step in range(1, config.max_iterations + 1):
         messages[:] = truncate_history(messages, config.max_context_tokens)
+        think_started = False
+
+        def on_reasoning(text: str) -> None:
+            nonlocal think_started
+            if not think_started:
+                emit(_event("think_start"))
+                think_started = True
+            emit(_event("think_delta", text=text))
+
+        def on_content(text: str) -> None:
+            emit(_event("content_delta", text=text))
+
         if config.stream:
-            response = client.chat_stream(messages, tools=tools)
+            response = client.chat_stream(
+                messages,
+                tools=tools,
+                on_content=on_content if emit else None,
+                on_reasoning=on_reasoning if emit else None,
+            )
         else:
             response = client.chat(messages, tools=tools)
         parsed = parse_response(response)
+
+        if emit:
+            reasoning = getattr(response, "reasoning", None)
+            if isinstance(reasoning, str) and reasoning and not think_started:
+                emit(_event("think_start"))
+                emit(_event("think_delta", text=reasoning))
+            if think_started or (isinstance(reasoning, str) and reasoning):
+                emit(_event("think_end"))
+            if not config.stream and not parsed.tool_calls and parsed.content:
+                emit(_event("content_delta", text=parsed.content))
+            emit(_event("round_end", has_tools=bool(parsed.tool_calls)))
 
         # 终止条件 1：模型未请求工具，视为最终答复
         if not parsed.tool_calls:
@@ -125,7 +171,10 @@ def run_turn(
         pending_final = None
         messages.append(_assistant_message(parsed))
         for tc in parsed.tool_calls:
-            _log_tool_call(step, tc.name, tc.arguments)
+            if emit:
+                emit(_event("tool_call", step=step, name=tc.name, args=_brief(tc.arguments, 150)))
+            else:
+                _log_tool_call(step, tc.name, tc.arguments)
 
         # human-in-the-loop：危险命令执行前人工确认（拒绝则不执行）
         refused: dict[int, str] = {}
@@ -140,20 +189,36 @@ def run_turn(
         executable_calls = [parsed.tool_calls[i] for i in executable_indices]
         results = _execute_tool_calls(executable_calls, workdir) if executable_calls else []
         observations: list[str] = [""] * len(parsed.tool_calls)
-        for i, obs in zip(executable_indices, results):
+        for i, (obs, _ms) in zip(executable_indices, results):
             observations[i] = obs
+        durations = {i: ms for i, (_obs, ms) in zip(executable_indices, results)}
         for i, obs in refused.items():
             observations[i] = obs
 
-        for tc, observation in zip(parsed.tool_calls, observations):
+        for i, (tc, observation) in enumerate(zip(parsed.tool_calls, observations)):
             if len(observation) > MAX_TOOL_TEXT:
                 observation = observation[:MAX_TOOL_TEXT] + "\n...（观测过长已截断）"
-            _log_observation(observation)
+            if emit:
+                collapsed = " | ".join(
+                    line.strip() for line in observation.splitlines() if line.strip()
+                )
+                emit(_event(
+                    "tool_result",
+                    step=step,
+                    name=tc.name,
+                    ok=not observation.startswith("错误"),
+                    output=_brief(collapsed, 200),
+                    duration_ms=durations.get(i, 0),
+                ))
+            else:
+                _log_observation(observation)
             messages.append({"role": "tool", "tool_call_id": tc.id, "content": observation})
 
     # 终止条件 2：达到最大迭代上限
     final = f"（达到最大迭代次数 {config.max_iterations}，任务未完成）"
-    if config.stream:
+    if emit:
+        emit(_event("error", severity="warn", message=final, text=final))
+    elif config.stream:
         print(final)  # 流式模式下该消息非模型输出，需自行打印
     return final
 
@@ -163,12 +228,22 @@ def run(
     task: str,
     workdir: str = ".",
     client: LLMClient | None = None,
+    emit: Callable[[dict[str, Any]], None] | None = None,
 ) -> str:
-    """单次任务：构造 system + user(task)，跑一轮工具循环。可复用传入的 client。"""
+    """单次任务：构造 system + user(task)，跑一轮工具循环。可复用传入的 client。
+
+    emit 为轨迹事件回调（Web 用）；为 None 时保持 CLI 打印行为。
+    """
     if client is None:
         client = LLMClient(config)
+    if emit:
+        emit(_event("turn_start", task=task))
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": task},
     ]
-    return run_turn(client, config, messages, tool_schemas(), workdir)
+    try:
+        return run_turn(client, config, messages, tool_schemas(), workdir, emit)
+    finally:
+        if emit:
+            emit(_event("turn_end"))

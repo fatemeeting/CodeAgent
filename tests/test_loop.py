@@ -95,6 +95,87 @@ def test_run_tool_error_becomes_observation(tmp_path):
     assert "错误" in tool_msg["content"]
 
 
+def test_run_without_emit_prints_logs(capsys, tmp_path):
+    """emit=None 时 CLI 打印路径零回归（工具日志走 stdout）。"""
+    responses = [
+        _response(content=None, tool_calls=[_tool_call()]),
+        _response(content="完成"),
+    ]
+    client = mock.Mock()
+    client.chat.side_effect = responses
+    with mock.patch("agent.loop.LLMClient", return_value=client):
+        out = run(_config(), "任务", workdir=str(tmp_path))
+    captured = capsys.readouterr().out
+    assert "[步骤 1] 调用工具 write_file" in captured
+    assert "↳" in captured
+    assert out == "完成"
+
+
+def _stream_config(max_iterations=5):
+    return Config(
+        api_key="k",
+        base_url="https://example.com",
+        model="deepseek-chat",
+        max_iterations=max_iterations,
+        stream=True,
+    )
+
+
+def test_run_emits_event_stream(tmp_path):
+    responses = [
+        _response(content=None, tool_calls=[_tool_call()]),
+        _response(content="已创建 a.txt"),
+    ]
+    client = mock.Mock()
+
+    def chat_stream(messages, tools=None, on_content=None, on_reasoning=None):
+        resp = responses.pop(0)
+        content = resp.choices[0].message.content
+        if on_content and content:
+            on_content(content)
+        return resp
+
+    client.chat_stream.side_effect = chat_stream
+    events = []
+    with mock.patch("agent.loop.LLMClient", return_value=client):
+        out = run(_stream_config(), "创建 a.txt", workdir=str(tmp_path), emit=events.append)
+    types = [e["type"] for e in events]
+    assert types[0] == "turn_start" and types[-1] == "turn_end"
+    for t in ("tool_call", "tool_result", "round_end", "content_delta"):
+        assert t in types, types
+    tr = next(e for e in events if e["type"] == "tool_result")
+    assert tr["name"] == "write_file" and tr["ok"] is True and tr["duration_ms"] >= 0
+    # 非正文事件 text 为空，不污染旧前端对话
+    assert all(e.get("text", "") == "" for e in events if e["type"] not in ("content_delta", "error"))
+    assert out == "已创建 a.txt"
+
+
+def test_run_emits_think_events():
+    client = mock.Mock()
+
+    def chat_stream(messages, tools=None, on_content=None, on_reasoning=None):
+        if on_reasoning:
+            on_reasoning("先想")
+        if on_content:
+            on_content("好")
+        return _response(content="好")
+
+    client.chat_stream.side_effect = chat_stream
+    events = []
+    with mock.patch("agent.loop.LLMClient", return_value=client):
+        run(_stream_config(), "任务", workdir=".", emit=events.append)
+    assert [e["type"] for e in events] == [
+        "turn_start",
+        "think_start",
+        "think_delta",
+        "content_delta",
+        "think_end",
+        "round_end",
+        "turn_end",
+    ]
+    assert events[2]["text"] == "先想"
+
+
 def _reflect_config(max_iterations=5):
     return Config(
         api_key="k",

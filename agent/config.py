@@ -55,6 +55,7 @@ class Config:
     reflect: bool = False  # 最终答复前注入自检（reflection）
     stream: bool = False  # 流式输出最终答复
     confirm_dangerous: bool = False  # 危险命令执行前人工确认（human-in-the-loop）
+    think: bool = False  # 开启思考：主模型切换 deepseek-reasoner（显式 DEEPSEEK_MODEL 优先）
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -64,14 +65,19 @@ class Config:
             raise RuntimeError(
                 "缺少 DEEPSEEK_API_KEY：请在 .env 或环境变量中设置（参考 .env.example）"
             )
+        think = os.environ.get("DEEPSEEK_THINK", "").lower() in ("1", "true", "yes")
+        model = os.environ.get("DEEPSEEK_MODEL") or (
+            "deepseek-reasoner" if think else "deepseek-chat"
+        )
         return cls(
             api_key=api_key,
             base_url=os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
-            model=os.environ.get("DEEPSEEK_MODEL", "deepseek-chat"),
+            model=model,
             max_iterations=int(os.environ.get("DEEPSEEK_MAX_ITERATIONS", "30")),
             max_context_tokens=int(os.environ.get("DEEPSEEK_MAX_CONTEXT_TOKENS", "12000")),
             reflect=os.environ.get("DEEPSEEK_REFLECT", "").lower() in ("1", "true", "yes"),
             stream=os.environ.get("DEEPSEEK_STREAM", "").lower() in ("1", "true", "yes"),
             confirm_dangerous=os.environ.get("DEEPSEEK_CONFIRM_DANGEROUS", "").lower()
             in ("1", "true", "yes"),
+            think=think,
         )

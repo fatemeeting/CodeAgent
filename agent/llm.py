@@ -45,12 +45,26 @@ class LLMClient:
                     kwargs["tools"] = tools
                 response = self._client.chat.completions.create(**kwargs)
                 self._record_usage(response)
+                self._attach_reasoning(response)
                 return response
             except Exception as exc:  # noqa: BLE001 - 统一捕获网络/API 错误后重试
                 last_exc = exc
                 if attempt < max_retries - 1:
                     time.sleep(min(2 ** attempt, 8))
         raise LLMError(f"LLM 调用失败（已重试 {max_retries} 次）：{last_exc}") from last_exc
+
+    @staticmethod
+    def _attach_reasoning(response: Any) -> None:
+        """把 reasoning_content（deepseek-reasoner 思考内容）挂载为 response.reasoning。"""
+        try:
+            reasoning = getattr(response.choices[0].message, "reasoning_content", None)
+        except Exception:  # noqa: BLE001 - mock / 异常结构容错
+            return
+        if isinstance(reasoning, str) and reasoning:
+            try:
+                response.reasoning = reasoning
+            except Exception:  # noqa: BLE001 - 只读对象则放弃挂载
+                pass
 
     def _record_usage(self, response: Any) -> None:
         """从响应累计 token 用量（mock 响应无 usage 时跳过）。"""
@@ -87,12 +101,18 @@ class LLMClient:
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None = None,
         max_retries: int = 3,
+        on_content=None,
+        on_reasoning=None,
     ) -> Any:
-        """流式调用：逐 token 打印内容，并重建 tool_calls 返回等价响应。"""
+        """流式调用：逐 token 打印（或经回调转发）内容，并重建 tool_calls 返回等价响应。
+
+        on_content(text)：内容增量回调（设置后不再打印到 stdout）；
+        on_reasoning(text)：deepseek-reasoner 思考增量回调。
+        """
         last_exc: Exception | None = None
         for attempt in range(max_retries):
             try:
-                return self._chat_stream_once(messages, tools)
+                return self._chat_stream_once(messages, tools, on_content, on_reasoning)
             except Exception as exc:  # noqa: BLE001
                 last_exc = exc
                 if attempt < max_retries - 1:
@@ -100,7 +120,11 @@ class LLMClient:
         raise LLMError(f"LLM 流式调用失败（已重试 {max_retries} 次）：{last_exc}") from last_exc
 
     def _chat_stream_once(
-        self, messages: list[dict[str, Any]], tools: list[dict[str, Any]] | None
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None,
+        on_content=None,
+        on_reasoning=None,
     ) -> Any:
         kwargs: dict[str, Any] = {"model": self._config.model, "messages": messages, "stream": True}
         if tools:
@@ -108,6 +132,7 @@ class LLMClient:
         stream = self._client.chat.completions.create(**kwargs)
 
         content_parts: list[str] = []
+        reasoning_parts: list[str] = []
         tool_buf: dict[int, dict[str, str]] = {}
         usage: Any = None
         for chunk in stream:
@@ -119,10 +144,18 @@ class LLMClient:
             delta = getattr(choices[0], "delta", None)
             if delta is None:
                 continue
+            reasoning = getattr(delta, "reasoning_content", None)
+            if isinstance(reasoning, str) and reasoning:
+                reasoning_parts.append(reasoning)
+                if on_reasoning:
+                    on_reasoning(reasoning)
             content = getattr(delta, "content", None)
             if content:
                 content_parts.append(content)
-                print(content, end="", flush=True)
+                if on_content:
+                    on_content(content)
+                else:
+                    print(content, end="", flush=True)
             for tc in getattr(delta, "tool_calls", None) or []:
                 idx = getattr(tc, "index", 0)
                 buf = tool_buf.setdefault(idx, {"id": "", "name": "", "arguments": ""})
@@ -135,9 +168,12 @@ class LLMClient:
                     if getattr(fn, "arguments", None):
                         buf["arguments"] += fn.arguments
 
-        if content_parts:
-            print()  # 流式内容结束后补换行
+        if content_parts and not on_content:
+            print()  # 流式内容结束后补换行（CLI 打印模式）
         response = self._build_streamed_response("".join(content_parts), tool_buf, usage)
+        reasoning = "".join(reasoning_parts)
+        if reasoning:
+            response.reasoning = reasoning
         self._record_usage(response)
         return response
 

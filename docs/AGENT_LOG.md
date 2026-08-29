@@ -533,3 +533,18 @@
   - `pytest -q` → **76 passed**（74 + 2 新增）
   - 真实命令冒烟：Python UTF-8 中文输出 ✓；GBK 字节输出还原 `中文GBK`（无 `�`）✓
 - **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
+
+## 迭代 7 切片 7.3：事件化后端（轨迹可视化基础）
+
+- **时间**：2026-08-29
+- **给 Agent 的任务**：迭代 7 轨迹可视化 · 切片 7.3——`loop.py` 增加可选 `emit(event)` 回调产出类型化事件（emit=None 时 CLI print 零回归）；`llm.py` 捕获 `reasoning_content`（deepseek-reasoner 思考流）；`config.py` 增 `DEEPSEEK_THINK` 开关切换 reasoner；`web.py /events` 发事件帧
+- **Agent 修改了什么**：
+  - `agent/loop.py`：`_event(kind, **fields)` 事件构造（统一 `text` 兜底字段，非正文事件不污染旧前端）；`run`/`run_turn` 增 `emit` 参数；事件点：`turn_start`、`think_start/think_delta/think_end`（流式经 `on_reasoning` 回调）、`content_delta`（经 `on_content`）、`round_end{has_tools}`、`tool_call{step,name,args摘要}`、`tool_result{ok,output摘要,duration_ms}`（`_timed_dispatch` 计时）、`error`（迭代上限 warn）、`turn_end`（finally）；emit=None 时走原 `_log_tool_call`/`_log_observation` print 路径
+  - `agent/llm.py`：`chat_stream` 增 `on_content`/`on_reasoning` 回调（回调模式下不再打印）；流式收集 `delta.reasoning_content` 挂载 `response.reasoning`；非流式 `chat` 挂载 `reasoning_content`
+  - `agent/config.py`：`think` 字段 + `DEEPSEEK_THINK` 开关（开启且未显式设 `DEEPSEEK_MODEL` 时模型切 `deepseek-reasoner`）；`.env.example` 同步
+  - `agent/web.py`：`_SseWriter` → `_NullWriter`（stdout 静默防双通道重复）；worker 传 `emit=q.put`，写循环直接发事件帧 JSON
+- **检查证据**：
+  - `pytest -q` → **83 passed**（76 + 7 新增：config 开关 ×2、llm reasoning ×2、loop 事件流/think/CLI 回归 ×3）
+  - 真实服务冒烟：SSE 事件序列精确匹配（turn_start → think → tool → 答复 → turn_end）
+  - openai 3.x 内省：`ChoiceDelta` schema 不含 `reasoning_content` 但 `model_validate` 经 pydantic extra 保留字段——`getattr(delta, "reasoning_content")` 方案对真实流有效
+- **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）

@@ -986,15 +986,10 @@ def _workspace_tree(workdir: str, deep: bool = False, max_depth: int = 5) -> lis
     return walk(root, 1)
 
 
-class _SseWriter:
-    """把 stdout 写入转发到队列，供 SSE 流式发送。"""
-
-    def __init__(self, q: queue.Queue):
-        self._q = q
+class _NullWriter:
+    """Web 事件流模式下丢弃 stdout（输出全部走 emit 事件，避免双通道重复）。"""
 
     def write(self, text: str) -> int:
-        if text:
-            self._q.put(text)
         return len(text)
 
     def flush(self) -> None:
@@ -1109,19 +1104,16 @@ class AgentHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
         q: queue.Queue = queue.Queue()
-        writer = _SseWriter(q)
         config = self.server.config
 
         def worker() -> None:
             try:
-                with contextlib.redirect_stdout(writer):
+                with contextlib.redirect_stdout(_NullWriter()):
                     stream_cfg = dataclasses.replace(config, stream=True)  # Web 恒流式
                     client = LLMClient(stream_cfg)
-                    result = run(stream_cfg, task, workdir=workdir, client=client)
-                    if not stream_cfg.stream:
-                        print(result)
+                    run(stream_cfg, task, workdir=workdir, client=client, emit=q.put)
             except Exception as exc:  # noqa: BLE001 - 错误推送给前端
-                print(f"错误：{exc}")
+                q.put({"type": "error", "severity": "error", "message": str(exc), "text": f"错误：{exc}"})
             finally:
                 q.put(None)  # 结束哨兵
 
@@ -1131,7 +1123,7 @@ class AgentHandler(BaseHTTPRequestHandler):
                 item = q.get()
                 if item is None:
                     break
-                payload = json.dumps({"text": item}, ensure_ascii=False)
+                payload = json.dumps(item, ensure_ascii=False)
                 self.wfile.write(f"data: {payload}\n\n".encode("utf-8"))
                 self.wfile.flush()
         except (BrokenPipeError, ConnectionResetError):

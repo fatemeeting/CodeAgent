@@ -1,20 +1,22 @@
-# gate-checklist.md — 迭代 7 · 切片 7.2 体验修复 6 放行清单
+# gate-checklist.md — 迭代 7 · 切片 7.3 放行清单
 
-> 当前阶段：迭代 7 · 切片 7.2 体验修复 6（步骤观测乱码）。放行决定：通过 / 重试 / 降级 / 停止。
+> 当前阶段：迭代 7 · 切片 7.3（事件化后端）。放行决定：通过 / 重试 / 降级 / 停止。
 
 ## 必过项
 
-- [x] `execute_command` 字节捕获 + `_decode` 回退链（UTF-8 → 本地编码 → GBK → 容错替换）
-- [x] 测试：UTF-8 用例 / GBK 回退 / 显式列表 / 全失败容错；真实命令冒烟
-- [x] `pytest -q` 全绿（76）
+- [x] `loop.py` emit 回调产出完整事件序列（turn_start → … → turn_end）；emit=None 时 CLI print 行为与改前一致（回归测试）
+- [x] `llm.py` 流式捕获 reasoning_content（on_reasoning/on_content 回调，回调模式下不打印）；非流式挂载 response.reasoning
+- [x] `config.py` `DEEPSEEK_THINK=1` → model=deepseek-reasoner；显式 DEEPSEEK_MODEL 优先
+- [x] `web.py /events` 事件帧（type+text，content_delta 携带正文）；增量流式测试 + 事件序列测试通过
+- [x] `pytest -q` 全绿（83）；真实服务冒烟；openai 3.x reasoning_content 透传内省
 
 ## 证据位置
 
-- 检查证据：见 `docs/AGENT_LOG.md` 迭代 7 切片 7.2 体验修复 6 条目
-- 代码：`agent/tools/shell_tools.py`、`tests/test_tools.py`
+- 检查证据：见 `docs/AGENT_LOG.md` 迭代 7 切片 7.3 条目
+- 代码：`agent/llm.py`、`agent/loop.py`、`agent/config.py`、`agent/web.py`、`.env.example`
 
 ## 退出决定
 
-- 通过 → 切片 7.3（刷新后恢复最近会话：消息重放 + 工作区 + 当前文件）
+- 通过 → 切片 7.4（前端内联折叠轨迹块 + 结构化持久化）
 - 重试 → 补齐缺失项后复查
 - 停止 → 记录原因
