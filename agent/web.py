@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import dataclasses
 import io
 import json
 import queue
@@ -34,82 +35,86 @@ INDEX_HTML = """<!DOCTYPE html>
     --accent-hover: #d94400; --code-bg: #fbfaf8; --ok: #2e7d32; --err: #c62828;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
   /* 工作区管理器（欢迎页整页 + 弹层复用同一卡片） */
-  #welcome { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px; }
-  .mgr-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 40px 44px; width: 520px; max-width: 92vw; box-shadow: 0 2px 12px rgba(38,37,30,.06); display: flex; flex-direction: column; gap: 12px; }
-  .mgr-title { font-size: 26px; font-weight: 700; text-align: center; letter-spacing: -.5px; }
+  #welcome { flex: 1; min-height: 0; overflow: auto; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .mgr-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 40px 44px; width: 520px; max-width: 92vw; max-height: 92vh; overflow-y: auto; box-shadow: 0 2px 12px rgba(38,37,30,.06); display: flex; flex-direction: column; gap: 12px; }
+  .mgr-title { font-size: 28px; font-weight: 700; text-align: center; letter-spacing: -.5px; }
   .mgr-sub { color: var(--muted); text-align: center; margin-bottom: 8px; }
-  .btn { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 8px; padding: 10px 14px; cursor: pointer; font-size: 14px; }
+  .btn { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 8px; padding: 10px 14px; cursor: pointer; font-size: 15px; }
   .btn:hover { background: var(--code-bg); }
   .btn-accent { background: var(--accent); color: #fff; border: none; font-weight: 600; }
   .btn-accent:disabled { background: #e3cfc4; cursor: not-allowed; }
   .btn-accent:not(:disabled):hover { background: var(--accent-hover); }
   .mgr-divider { height: 1px; background: var(--border); margin: 4px 0; }
-  .mgr-path { padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: Consolas, monospace; width: 100%; }
-  .mgr-status { font-size: 13px; min-height: 18px; color: var(--muted); }
+  .mgr-path { padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; font-family: Consolas, monospace; width: 100%; }
+  .mgr-status { font-size: 14px; min-height: 18px; color: var(--muted); }
   .mgr-status.ok { color: var(--ok); }
   .mgr-status.err { color: var(--err); }
-  .mgr-recents-title { font-size: 13px; color: var(--muted); }
-  .recent { padding: 8px 10px; border-radius: 8px; cursor: pointer; font-family: Consolas, monospace; font-size: 13px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .mgr-recents-title { font-size: 14px; color: var(--muted); }
+  .recent { padding: 8px 10px; border-radius: 8px; cursor: pointer; font-family: Consolas, monospace; font-size: 14px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
   .recent:hover { background: var(--code-bg); }
   .recent .path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
   .recent .del { color: var(--muted); font-weight: 700; padding: 0 4px; flex-shrink: 0; }
   .recent .del:hover { color: var(--err); }
-  .mgr-cancel { border: none; background: none; color: var(--muted); cursor: pointer; font-size: 13px; padding: 6px; }
+  .mgr-cancel { border: none; background: none; color: var(--muted); cursor: pointer; font-size: 14px; padding: 6px; }
   /* 主布局骨架 */
-  #main { display: none; flex: 1; flex-direction: column; }
-  #topbar { display: flex; align-items: center; gap: 12px; padding: 8px 16px; background: var(--surface); border-bottom: 1px solid var(--border); }
-  .brand { font-weight: 700; font-size: 14px; letter-spacing: -.3px; }
-  .ws-chip { margin-left: auto; display: flex; align-items: center; gap: 8px; font-family: Consolas, monospace; font-size: 13px; border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; background: var(--code-bg); }
-  .ws-chip button { border: none; background: none; cursor: pointer; color: var(--accent); font-size: 13px; font-weight: 600; }
+  #main { display: none; flex: 1; min-height: 0; height: 100vh; height: 100dvh; flex-direction: column; overflow: hidden; }
+  #topbar { display: flex; flex-shrink: 0; align-items: center; gap: 12px; padding: 8px 16px; background: var(--surface); border-bottom: 1px solid var(--border); overflow: hidden; }
+  .brand { font-weight: 700; font-size: 15px; letter-spacing: -.3px; white-space: nowrap; }
+  .ws-chip { margin-left: auto; display: flex; align-items: center; gap: 8px; font-family: Consolas, monospace; font-size: 14px; border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; background: var(--code-bg); max-width: 45vw; overflow: hidden; }
+  #ws-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ws-chip button { border: none; background: none; cursor: pointer; color: var(--accent); font-size: 14px; font-weight: 600; }
   /* 会话栏（迭代 7 · 7.2） */
   .sess-bar { display: flex; align-items: center; gap: 6px; }
-  .sess-bar select { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 8px; padding: 6px 8px; font-size: 13px; max-width: 240px; }
-  .sess-bar button { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 8px; padding: 6px 9px; cursor: pointer; font-size: 12px; line-height: 1; }
+  .sess-bar select { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 8px; padding: 6px 8px; font-size: 14px; max-width: 240px; }
+  .sess-bar button { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 8px; padding: 8px 12px; cursor: pointer; font-size: 14px; line-height: 1; white-space: nowrap; }
   .sess-bar button:hover { background: var(--code-bg); border-color: var(--accent); }
-  #content { flex: 1; display: flex; min-height: 0; }
-  .pane { display: flex; flex-direction: column; overflow: hidden; }
+  #content { flex: 1; min-height: 0; height: 0; display: flex; overflow: hidden; }
+  .pane { display: flex; flex-direction: column; overflow: hidden; min-height: 0; min-width: 0; }
   #pane-left { width: 240px; }
   #pane-center { flex: 1; min-width: 0; }
   #pane-right { width: 380px; }
   .splitter { width: 4px; cursor: col-resize; background: var(--border); flex-shrink: 0; }
   .splitter:hover { background: var(--accent); }
   #editor-host { flex: 1; min-height: 0; }
-  .placeholder { color: var(--muted); font-size: 14px; display: flex; align-items: center; justify-content: center; height: 100%; border: 1px dashed var(--border); border-radius: 12px; margin: 16px; }
+  .placeholder { color: var(--muted); font-size: 15px; display: flex; align-items: center; justify-content: center; height: 100%; border: 1px dashed var(--border); border-radius: 12px; margin: 16px; }
   /* 对话区（右侧聊天面板） */
-  #chat-history { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
-  .chat-hint { color: var(--muted); font-size: 13px; padding: 2px 0; }
+  #chat-history { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+  .chat-hint { color: var(--muted); font-size: 14px; padding: 2px 0; }
   .msg-col { display: flex; flex-direction: column; max-width: 85%; }
   .msg.user .msg-col { align-items: flex-end; }
   .msg.agent .msg-col { align-items: flex-start; }
-  .role-label { font-size: 11px; color: var(--muted); margin-bottom: 3px; }
-  #chat-inputbar { display: flex; gap: 10px; padding: 12px 16px 16px; background: var(--surface); border-top: 1px solid var(--border); align-items: flex-end; }
-  #chat-input { flex: 1; resize: none; height: 44px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 14px; font-size: 13px; font-family: inherit; background: var(--bg); color: var(--text); outline: none; }
+  .role-label { font-size: 12px; color: var(--muted); margin-bottom: 3px; }
+  #chat-inputbar { display: flex; flex-shrink: 0; gap: 10px; padding: 12px 16px 16px; background: var(--surface); border-top: 1px solid var(--border); align-items: flex-end; }
+  #chat-input { flex: 1; resize: none; height: 44px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 14px; font-size: 14px; font-family: inherit; background: var(--bg); color: var(--text); outline: none; }
   #chat-input:focus { border-color: var(--accent); }
-  .send-btn { padding: 10px 22px; background: var(--accent); color: #fff; border: none; border-radius: 999px; cursor: pointer; font-weight: 600; font-size: 13px; white-space: nowrap; }
+  .send-btn { padding: 10px 22px; background: var(--accent); color: #fff; border: none; border-radius: 999px; cursor: pointer; font-weight: 600; font-size: 14px; white-space: nowrap; }
   .send-btn:hover { background: var(--accent-hover); }
   .msg { display: flex; }
   .msg.user { justify-content: flex-end; }
-  .bubble { max-width: 85%; padding: 8px 12px; border-radius: 12px; white-space: pre-wrap; word-break: break-word; font-size: 13px; line-height: 1.55; }
+  .bubble { max-width: 85%; padding: 8px 12px; border-radius: 12px; white-space: pre-wrap; word-break: break-word; font-size: 14px; line-height: 1.55; }
   .msg.user .bubble { background: var(--accent); color: #fff; }
   .msg.agent .bubble { background: var(--surface); border: 1px solid var(--border); font-family: Consolas, "Courier New", monospace; }
   .tool { color: #b33a00; font-weight: 600; }
   .obs { color: var(--ok); }
   .bubble pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px; margin: 4px 0; overflow-x: auto; }
-  .bubble code.ic { background: var(--code-bg); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; font-size: 12px; }
+  .bubble code.ic { background: var(--code-bg); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; font-size: 13px; }
   .bubble h1, .bubble h2, .bubble h3, .bubble h4 { margin: 6px 0 2px; font-size: 1.02em; }
   .bubble ul { margin: 2px 0; padding-left: 18px; }
   .bubble a { color: var(--accent); }
   /* 文件页（右栏） */
-  #file-header { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 12px 16px 8px; }
-  #file-tab { display: none; font-family: Consolas, monospace; font-size: 13px; font-weight: 600; background: var(--surface); border: 1px solid var(--border); border-radius: 6px 6px 0 0; padding: 6px 12px; }
-  #file-view, .file-view { flex: 1; margin: 0 16px 16px; background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px; overflow: auto; font-family: Consolas, monospace; font-size: 13px; line-height: 1.5; }
-  #file-view .ln, .file-view .ln { display: inline-block; width: 40px; color: var(--muted); text-align: right; margin-right: 12px; user-select: none; }
+  #file-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 12px 16px 8px; }
+  #file-tab { display: none; font-family: Consolas, monospace; font-size: 14px; font-weight: 600; background: var(--surface); border: 1px solid var(--border); border-radius: 6px 6px 0 0; padding: 6px 12px; }
+  #file-save { display: none; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 8px; padding: 6px 14px; cursor: pointer; font-size: 14px; font-weight: 600; }
+  #file-save:hover { border-color: var(--accent); color: var(--accent); }
+  #file-view, .file-view { flex: 1; margin: 0 16px 16px; background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px; overflow: hidden; font-family: Consolas, monospace; font-size: 14px; line-height: 1.5; display: flex; flex-direction: row; }
+  .fv-nums { width: 48px; flex-shrink: 0; overflow: hidden; color: var(--muted); text-align: right; padding-right: 12px; white-space: pre; user-select: none; }
+  .fv-ta { flex: 1; border: none; outline: none; background: transparent; resize: none; font-family: Consolas, monospace; font-size: 14px; line-height: 1.5; color: var(--text); padding: 0 0 0 12px; overflow: auto; overscroll-behavior: contain; }
   /* 文件树（Editor 左栏） */
-  .tree-title { font-size: 12px; font-weight: 700; color: var(--muted); padding: 10px 16px 6px; letter-spacing: .3px; }
-  #tree-root { flex: 1; overflow: auto; padding: 4px 8px 16px; }
-  .tree-node { font-size: 13px; }
+  .tree-title { font-size: 13px; font-weight: 700; color: var(--muted); padding: 10px 16px 6px; letter-spacing: .3px; }
+  #tree-root { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 4px 8px 16px; }
+  .tree-node { font-size: 14px; }
   .tree-label { display: block; padding: 3px 6px; border-radius: 6px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .tree-label:hover { background: var(--code-bg); }
   .tree-label.file { font-family: Consolas, monospace; }
@@ -146,9 +151,9 @@ INDEX_HTML = """<!DOCTYPE html>
     <span class="brand">🤖 编程智能体</span>
     <div class="sess-bar">
       <select id="sess-select" onchange="switchSession(this.value)" title="选择会话"></select>
-      <button id="sess-new" onclick="createSession()" title="新建会话">＋</button>
-      <button id="sess-rename" onclick="renameSession()" title="重命名当前会话">✎</button>
-      <button id="sess-del" onclick="deleteSession()" title="删除当前会话">🗑</button>
+      <button id="sess-new" onclick="createSession()" title="新建会话">新建会话</button>
+      <button id="sess-rename" onclick="renameSession()" title="重命名当前会话">重命名</button>
+      <button id="sess-del" onclick="deleteSession()" title="删除当前会话">删除</button>
     </div>
     <div class="ws-chip">
       <span id="ws-name"></span>
@@ -293,6 +298,8 @@ let currentFile = null;
 /* ---------- 会话管理（迭代 7 · 切片 7.2：列表/新建/切换/重命名/删除 + 消息落盘） ---------- */
 let currentSessionId = null;
 let sessionSaving = false;
+let savePending = false;
+let firstTask = null;
 
 async function loadSessions() {
   try {
@@ -336,6 +343,7 @@ async function switchSession(id) {
     if (!data.ok || !data.session) return;
     const s = data.session;
     currentSessionId = s.id;
+    firstTask = null;
     state.workspace = s.workspace || state.workspace;
     localStorage.setItem('agent.workspace', state.workspace);
     document.getElementById('ws-name').textContent = state.workspace;
@@ -356,6 +364,7 @@ async function createSession() {
     const data = await resp.json();
     if (!data.ok || !data.session) return;
     currentSessionId = data.session.id;
+    firstTask = null;
     await loadSessions();
     chatMessages = [];
     buildChat('pane-right');
@@ -384,6 +393,7 @@ async function deleteSession() {
   if (!window.confirm('删除当前会话及其对话记录？')) return;
   const id = currentSessionId;
   currentSessionId = null;
+  firstTask = null;
   chatMessages = [];
   buildChat('pane-right');
   try {
@@ -393,16 +403,40 @@ async function deleteSession() {
 }
 
 async function saveMessages() {
-  if (!currentSessionId || sessionSaving) return;
+  if (!currentSessionId) return;
+  if (sessionSaving) { savePending = true; return; }
   sessionSaving = true;
+  do {
+    savePending = false;
+    try {
+      await fetch('/sessions/' + encodeURIComponent(currentSessionId) + '/messages', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({messages: chatMessages}),
+      });
+    } catch (e) { /* 忽略 */ }
+  } while (savePending);
+  sessionSaving = false;
+}
+
+/* 首次会话自动命名：按首条用户任务压缩空白、截断 20 字 */
+function sessionTitle(task) {
+  const t = String(task || '').replace(/\\s+/g, ' ').trim();
+  if (!t) return '新会话';
+  return t.length > 20 ? t.slice(0, 20) + '…' : t;
+}
+
+async function autoRenameSession(task) {
+  if (!currentSessionId) return;
+  const name = sessionTitle(task);
   try {
-    await fetch('/sessions/' + encodeURIComponent(currentSessionId) + '/messages', {
+    await fetch('/sessions/' + encodeURIComponent(currentSessionId), {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({messages: chatMessages}),
+      body: JSON.stringify({name: name}),
     });
+    await loadSessions();
   } catch (e) { /* 忽略 */ }
-  finally { sessionSaving = false; }
 }
 
 function initSplitters() {
@@ -419,6 +453,15 @@ function initSplitters() {
     center.style.flex = '1';
   };
   apply();
+  // 缩放/窄窗口自适应：左右栏宽按视口钳制，右栏（对话框）永不越界
+  const clamp = () => {
+    const maxSide = Math.max(140, Math.floor(window.innerWidth * 0.38));
+    if (leftW > maxSide) { leftW = maxSide; localStorage.setItem('agent.paneLeft', String(leftW)); }
+    if (rightW > maxSide) { rightW = maxSide; localStorage.setItem('agent.paneRight', String(rightW)); }
+    apply();
+  };
+  clamp();
+  window.addEventListener('resize', function () { clamp(); });
   const drag = (splitter, isLeft) => {
     splitter.addEventListener('mousedown', function (e) {
       e.preventDefault();
@@ -595,6 +638,7 @@ async function sendTask() {
   const task = input.value.trim();
   if (!task) return;
   input.value = '';
+  if (!chatMessages.some(m => m.role === 'user')) firstTask = task;
   chatMessages.push({role: 'user', raw: task});
   appendMsg('user', task);
   chatMessages.push({role: 'agent', raw: ''});
@@ -611,6 +655,7 @@ async function sendTask() {
       renderBubble(bubble);
       refreshFiles();
       saveMessages();
+      if (firstTask) { autoRenameSession(firstTask); firstTask = null; }
       return;
     }
     chatMessages[idx].raw += JSON.parse(e.data).text;
@@ -638,8 +683,18 @@ function initEditor() {
       language: currentFile ? langOf(currentFile.name) : 'plaintext',
       theme: 'vs',
       automaticLayout: true,
-      fontSize: 13,
+      fontSize: 14,
       minimap: { enabled: false },
+    });
+    try {
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, function () { saveFile(); });
+    } catch (e2) { /* 忽略 */ }
+    // flex 容器中 automaticLayout 偶发失效：创建后与窗口变化时显式重排
+    setTimeout(function () {
+      try { if (editor) editor.layout(); } catch (e3) { /* 忽略 */ }
+    }, 50);
+    window.addEventListener('resize', function () {
+      try { if (editor) editor.layout(); } catch (e3) { /* 忽略 */ }
     });
   } catch (e) {
     editor = null;
@@ -679,6 +734,7 @@ function buildEditor() {
   document.getElementById('pane-center').innerHTML = `
     <div id="file-header">
       <span id="file-tab">—</span>
+      <button id="file-save" onclick="saveFile()" title="保存修改（Ctrl+S）">保存</button>
     </div>
     <div id="editor-host"><div class="placeholder">点击左侧文件树查看代码</div></div>`;
   ensureMonaco();
@@ -712,6 +768,8 @@ async function loadFile(name) {
     if (data.ok) {
       currentFile = { name: data.name, content: data.content };
       if (tab) { tab.textContent = data.name; tab.style.display = ''; }
+      const saveBtn = document.getElementById('file-save');
+      if (saveBtn) saveBtn.style.display = '';
       if (editor) {
         try {
           editor.setValue(data.content);
@@ -724,6 +782,8 @@ async function loadFile(name) {
       }
     } else {
       if (tab) tab.style.display = 'none';
+      const saveBtn = document.getElementById('file-save');
+      if (saveBtn) saveBtn.style.display = 'none';
       const view = document.getElementById('editor-host');
       if (view) view.innerHTML = '<div class="placeholder">' + (data.error || '加载失败') + '</div>';
     }
@@ -733,20 +793,62 @@ async function loadFile(name) {
   }
 }
 
+async function saveFile() {
+  if (!currentFile) return;
+  const content = editorContent();
+  const btn = document.getElementById('file-save');
+  const done = ok => {
+    if (!btn) return;
+    btn.textContent = ok ? '已保存 ✓' : '保存失败';
+    btn.disabled = true;
+    setTimeout(function () { btn.textContent = '保存'; btn.disabled = false; }, 1500);
+  };
+  try {
+    const resp = await fetch('/save-file', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({workdir: state.workspace, path: currentFile.name, content: content}),
+    });
+    const data = await resp.json();
+    if (data.ok) { currentFile.content = content; done(true); }
+    else { done(false); }
+  } catch (e) { done(false); }
+}
+
+function editorContent() {
+  if (editor) {
+    try { return editor.getValue(); } catch (e) { /* 回退 textarea */ }
+  }
+  const ta = document.getElementById('file-ta');
+  return ta ? ta.value : '';
+}
+
 function renderFile(content) {
   const view = document.getElementById('editor-host');
   if (!view) return;
   view.className = 'file-view';
   view.innerHTML = '';
-  content.split('\\n').forEach(function (line, i) {
-    const div = document.createElement('div');
-    const num = document.createElement('span');
-    num.className = 'ln';
-    num.textContent = String(i + 1);
-    div.appendChild(num);
-    div.appendChild(document.createTextNode(line === '' ? ' ' : line));
-    view.appendChild(div);
+  const nums = document.createElement('div');
+  nums.className = 'fv-nums';
+  const ta = document.createElement('textarea');
+  ta.className = 'fv-ta';
+  ta.id = 'file-ta';
+  ta.value = content;
+  ta.spellcheck = false;
+  const syncNums = function () {
+    const n = ta.value.split('\\n').length;
+    let out = '';
+    for (let i = 1; i <= n; i++) out += i + '\\n';
+    nums.textContent = out;
+  };
+  syncNums();
+  ta.addEventListener('scroll', function () { nums.scrollTop = ta.scrollTop; });
+  ta.addEventListener('input', syncNums);
+  ta.addEventListener('keydown', function (e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveFile(); }
   });
+  view.appendChild(nums);
+  view.appendChild(ta);
 }
 
 /* ---------- 文件树（Editor 左栏） ---------- */
@@ -905,6 +1007,7 @@ class AgentHandler(BaseHTTPRequestHandler):
             data = INDEX_HTML.encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")  # 防旧页缓存
             self.send_header("Content-Length", str(len(data)))
             self.end_headers()
             self.wfile.write(data)
@@ -965,6 +1068,29 @@ class AgentHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def _handle_save_file(self) -> None:
+        """保存工作区内文件（UTF-8；路径越界防护；允许子目录新建）。"""
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            body = json.loads(self.rfile.read(length) or b"{}")
+            workdir = str(body.get("workdir") or self.server.workdir)
+            rel = str(body.get("path") or "")
+            content = str(body.get("content") or "")
+            if not rel:
+                raise ValueError("缺少 path")
+            root = Path(workdir).resolve()
+            if not root.is_dir():
+                raise ValueError(f"工作区不存在：{workdir}")
+            target = (root / rel).resolve()
+            if not target.is_relative_to(root):
+                raise ValueError(f"路径越界：{rel}")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(content, encoding="utf-8")
+            result = {"ok": True, "path": rel, "name": target.name}
+        except Exception as exc:  # noqa: BLE001
+            result = {"ok": False, "error": str(exc)}
+        self._write_json(result)
+
     def _handle_events(self) -> None:
         """SSE 流式：后台线程运行 agent，逐条推送输出，[DONE] 结束。"""
         parsed = urllib.parse.urlparse(self.path)
@@ -989,9 +1115,10 @@ class AgentHandler(BaseHTTPRequestHandler):
         def worker() -> None:
             try:
                 with contextlib.redirect_stdout(writer):
-                    client = LLMClient(config)
-                    result = run(config, task, workdir=workdir, client=client)
-                    if not config.stream:
+                    stream_cfg = dataclasses.replace(config, stream=True)  # Web 恒流式
+                    client = LLMClient(stream_cfg)
+                    result = run(stream_cfg, task, workdir=workdir, client=client)
+                    if not stream_cfg.stream:
                         print(result)
             except Exception as exc:  # noqa: BLE001 - 错误推送给前端
                 print(f"错误：{exc}")
@@ -1070,6 +1197,8 @@ class AgentHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(data)))
             self.end_headers()
             self.wfile.write(data)
+        elif self.path.startswith("/save-file"):
+            self._handle_save_file()
         elif self.path.startswith("/sessions"):
             self._handle_sessions_post()
         else:

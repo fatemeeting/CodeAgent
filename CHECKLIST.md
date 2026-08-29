@@ -155,3 +155,37 @@
 - [x] W1 顶栏会话栏：下拉列表（`/sessions`）+ 新建 / 重命名 / 删除按钮；无会话时发送任务自动建会话
 - [x] W2 切换会话：工作区切到会话绑定目录（同步 ws-name / localStorage / 重载文件树），对话区重放会话消息
 - [x] W3 消息落盘：用户消息入列后与 `[DONE]` 时 `POST /sessions/<id>/messages` 全量保存 `{role, raw}`
+
+## X. 迭代 7 切片 7.2 体验修复（字体放大 + 会话按钮中文 + 自动命名）
+
+- [x] X1 全局字体放大：CSS 字号整体上调一档（11→12、12→13、13→14、14→15、标题 26→28），Monaco 13→14
+- [x] X2 会话栏按钮：新建 / 重命名 / 删除改中文文案并放大（14px + 加大内边距）
+- [x] X3 首次会话自动命名：首条用户消息运行结束后按任务自动重命名（截断 20 字 + …，空任务兜底）
+
+## Y. 迭代 7 切片 7.2 体验修复 2（对话框布局稳定 + 文件编辑保存）
+
+- [x] Y1 对话面板稳定：`#chat-history` min-height:0、`#chat-inputbar` flex-shrink:0，长对话输入框不消失
+- [x] Y2 文件头「保存」按钮 + Monaco Ctrl+S + 回退 textarea 可编辑（行号同步）
+- [x] Y3 `POST /save-file` 端点：UTF-8 写入、越界防护、子目录新建；测试覆盖
+
+## Z. 迭代 7 切片 7.2 体验修复 3（三栏独立滚动）
+
+- [x] Z1 左栏 `#tree-root` 加 `min-height: 0`：深层文件树出现滚动条而非被裁剪
+- [x] Z2 三栏滚动互不影响：左（树）/ 中（Monaco 或回退 textarea）/ 右（聊天）各带滚动条，输入条恒定可见
+
+## AA. 迭代 7 切片 7.2 体验修复 4（Web 恒流式 + 滚动兜底）
+
+- [x] AA1 `/events` 强制 stream=True：网页无论配置如何都逐 token 流式输出（CLI 不变）
+- [x] AA2 滚动兜底：三栏滚动容器 `overscroll-behavior: contain`；管理器卡片 max-height 92vh 可滚动；Monaco layout()/resize 重排
+- [x] AA3 `saveMessages` 排队去重：`[DONE]` 落盘不被进行中的保存跳过
+
+## AB. 迭代 7 切片 7.2 体验修复 5（布局全链路加固 + 缩放自适应）
+
+- [x] AB1 显式高度链：`#main` height 100vh/100dvh、`#content` height:0+flex:1、`.pane` min-height/min-width:0、`#topbar` flex-shrink:0
+- [x] AB2 缩放自适应：`clampPanes` 栏宽 ≤ 38vw（resize 回收 + 持久化）；工作区 chip 超长省略
+- [x] AB3 `/` 响应 `Cache-Control: no-store` 防旧页缓存
+
+## AC. 迭代 7 切片 7.2 体验修复 6（步骤观测乱码）
+
+- [x] AC1 `execute_command` 字节捕获 + `_decode` 编码回退链（UTF-8 → 本地编码 → GBK → 容错）
+- [x] AC2 测试覆盖：UTF-8 / GBK 回退 / 显式列表 / 全失败容错；真实命令冒烟

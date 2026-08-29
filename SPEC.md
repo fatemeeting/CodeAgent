@@ -120,3 +120,34 @@ coding-agent/
 3. **消息落盘**：用户消息入列后与 agent 运行结束（`[DONE]`）时，`POST /sessions/<id>/messages` 全量保存 `{role, raw}` 消息列表。
 
 非目标（留给 7.3）：刷新页面后自动恢复最近会话、当前文件恢复、跨标签页同步。
+
+## 14. 迭代 7 · 切片 7.2 体验修复（字体放大 + 会话按钮中文 + 自动命名）
+
+1. **全局字体放大**：页面全部字号上调一档（11→12、12→13、13→14、14→15、标题 26→28），Monaco 编辑器字号 13→14。
+2. **会话栏按钮**：新建 / 重命名 / 删除改中文文案并放大（14px、加大内边距），替代 ＋/✎/🗑 图标。
+3. **首次会话自动命名**：每个会话第一条用户消息后、运行结束（`[DONE]`）时按首条任务自动重命名（`sessionTitle`：压缩空白、截断 20 字 + 省略号，空任务兜底「新会话」）；新建 / 切换 / 删除会话时清空命名标记。
+
+## 15. 迭代 7 · 切片 7.2 体验修复 2（对话框布局稳定 + 文件手动编辑保存）
+
+1. **对话面板布局稳定**：`#chat-history` 加 `min-height: 0`（长对话时收缩滚动，输入框不再被顶出可视区）；`#chat-inputbar` 加 `flex-shrink: 0`（输入条恒定可见）。
+2. **文件手动编辑与保存**：文件头新增「保存」按钮（无文件时隐藏）；Monaco 支持 Ctrl+S；无 Monaco 的回退视图改为可编辑 textarea（行号随滚动/输入同步）；新增后端端点 `POST /save-file`（workdir + path + content，UTF-8 写入，路径越界防护，允许子目录新建文件）。
+
+## 16. 迭代 7 · 切片 7.2 体验修复 3（三栏独立滚动）
+
+1. **三栏各自滚动**：左栏文件树 `#tree-root` 加 `min-height: 0`（修复深层树被裁剪、滚动条不出现的 flex 收缩问题）；中栏 `#editor-host`（Monaco 内置滚动 / 回退 textarea）与右栏 `#chat-history`（min-height: 0 + 输入条 flex-shrink: 0）维持栏内滚动——三栏互不影响，各带自己的滚动条。
+
+## 17. 迭代 7 · 切片 7.2 体验修复 4（Web 恒流式 + 滚动兜底）
+
+1. **Web 恒流式**：`/events` 强制 `stream=True`（`dataclasses.replace` 覆盖配置）——网页无论 `DEEPSEEK_STREAM` 是否开启，最终答复都逐 token 推送；CLI 行为不变。
+2. **滚动兜底**：三栏滚动容器加 `overscroll-behavior: contain`（滚轮滚动到边界不再失控）；工作区管理器卡片 `max-height: 92vh + overflow-y: auto`（矮窗口可滚动）；Monaco 创建后 `layout()` + window resize 重排（flex 容器中 automaticLayout 失效兜底）。
+3. **消息落盘排队**：`saveMessages` 加 pending 队列——`[DONE]` 落盘不再被进行中的保存跳过。
+
+## 18. 迭代 7 · 切片 7.2 体验修复 5（布局全链路加固 + 缩放自适应）
+
+1. **显式高度链条**：`body` 100vh/100dvh；`#main` height 100vh/100dvh + min-height 0 + overflow hidden；`#content` `height: 0 + flex: 1 + min-height: 0`（铁律模式，内容永不撑高容器）；`.pane` 补 `min-height/min-width: 0`；`#topbar` flex-shrink 0 + overflow hidden——三栏滚动容器在任何窗口尺寸下都获得确定高度。
+2. **缩放自适应**：栏宽按视口比例钳制（`clampPanes`：左右栏 ≤ 38vw，resize 时回收并持久化），浏览器缩放/窄窗口下右栏（对话框）不再被推出视口；工作区路径 chip 超长省略号。
+3. **防旧页缓存**：`/` 响应加 `Cache-Control: no-store`，刷新即最新页面。
+
+## 19. 迭代 7 · 切片 7.2 体验修复 6（步骤观测乱码）
+
+1. **命令输出编码回退**：`execute_command` 改为字节捕获 + `_decode` 回退链（UTF-8 优先 → 系统本地编码如 CP936/GBK → 容错替换）——Python 子进程输出 UTF-8，cmd 内置命令按控制台代码页输出，按单一 UTF-8 解码会产生乱码。

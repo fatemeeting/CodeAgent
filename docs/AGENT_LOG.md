@@ -445,3 +445,91 @@
   - 真实服务冒烟：页面 13 个标记全部就位；前端会话流 HTTP 仿真（自动建会话 → 落盘 → 重放 → 重命名 → 列表 → 删除）全过
   - `node --check` 提取的 2 个内联 `<script>` → 语法通过（EXIT=0）
 - **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
+
+## 迭代 7 切片 7.2 体验修复：字体放大 + 会话按钮中文 + 首次会话自动命名
+
+- **时间**：2026-08-29
+- **给 Agent 的任务**（用户反馈三项）：① UI 上所有字号放大；② 新建 / 重命名 / 删除会话按钮放大并改中文文案（不用图标）；③ 每个会话第一次会话后按用户第一条任务自动重命名
+- **Agent 修改了什么**（仅 `agent/web.py` 内嵌页面）：
+  - 全局字号上调一档：11→12、12→13、13→14、14→15、标题 26→28；Monaco `fontSize` 13→14
+  - 会话栏三按钮：＋/✎/🗑 图标 → 中文「新建会话」「重命名」「删除」，字号 14px、内边距 8px 12px、`white-space: nowrap`
+  - 新增 `sessionTitle(task)`（压缩空白、截断 20 字 + 省略号、空任务兜底「新会话」）与 `autoRenameSession`；`sendTask` 里记录 `firstTask`（会话内首条用户消息），SSE `[DONE]` 时自动重命名并清空标记；新建 / 切换 / 删除会话时重置 `firstTask`
+- **检查证据**：
+  - `pytest -q` → **72 passed**（后端未改，无回归）
+  - 冒烟：中文按钮文案就位且图标消失；`font-size: 15px` / `28px` / `14px` 就位、`11px` 消失；`sessionTitle` / `autoRenameSession` / `firstTask` 钩子就位
+  - `node --check` 两个内联 `<script>` → 语法通过（EXIT=0）
+  - `sessionTitle` 四用例 node 断言（去首尾空白、换行压缩空格、空任务兜底、超长截断 + …）→ SESSION_TITLE OK
+- **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
+
+## 迭代 7 切片 7.2 体验修复 2：对话框布局稳定 + 文件手动编辑保存
+
+- **时间**：2026-08-29
+- **给 Agent 的任务**（用户反馈两项）：① 对话过长时对话框（输入区）消失，聊天面板应固定占页面一定比例；② 无法手动编辑 / 修改代码文件
+- **Agent 修改了什么**：
+  - `agent/web.py` 布局：`#chat-history` 加 `min-height: 0`（长对话收缩滚动，输入框不再被顶出可视区）；`#chat-inputbar` 加 `flex-shrink: 0`（输入条恒定可见，右栏宽度不受影响）
+  - 文件编辑保存：文件头新增「保存」按钮（`#file-save`，无文件时隐藏，保存后短暂显示「已保存 ✓」）；Monaco 注册 Ctrl+S（`KeyMod.CtrlCmd | KeyCode.KeyS`）；无 Monaco 的回退视图改为可编辑 textarea（`.fv-ta`）+ 行号栏（`.fv-nums`，滚动/输入同步）；`editorContent()` 统一取 Monaco 或 textarea 内容
+  - 后端新增 `POST /save-file`：workdir + path + content，UTF-8 写入；`Path.resolve` + `is_relative_to` 越界防护（拒绝 `../` 逃逸）；`target.parent.mkdir` 支持子目录新建
+  - 测试：`tests/test_web.py` 新增 `test_web_save_file`（覆盖写入 / 子目录新建 / 越界拒绝 / 工作区不存在 / 缺 path）
+- **检查证据**：
+  - `pytest -q` → **73 passed**（72 + 新增 1）
+  - 真实服务冒烟：页面标记（`file-save`/`saveFile`/`editorContent`/`fv-ta`/`min-height: 0`/`flex-shrink: 0`/Ctrl+S）全部就位；`/save-file` 真实写入往返（覆盖 / 子目录新建 / `../` 越界拒绝）通过
+  - `node --check` 两个内联 `<script>` → 语法通过（EXIT=0）
+- **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
+
+## 迭代 7 切片 7.2 体验修复 3：三栏独立滚动
+
+- **时间**：2026-08-29
+- **给 Agent 的任务**（用户反馈）：三个栏视为不同部分，每栏配一个滚动条，允许各自上下滑动
+- **Agent 修改了什么**（`agent/web.py`）：
+  - 左栏：`#tree-root` 补 `min-height: 0`——修复深层文件树作为 flex 子项拒绝收缩、内容被 `overflow: hidden` 裁剪且滚动条不出现的问题
+  - 核查并确认三栏滚动齐备：左栏树（`#tree-root` overflow auto）、中栏（`#editor-host` min-height 0 + Monaco 内置滚动 / 回退 `.fv-ta` overflow auto）、右栏聊天（`#chat-history` min-height 0 + 输入条 flex-shrink 0，上一切片已修）
+- **检查证据**：
+  - `pytest -q` → **73 passed**（无回归）
+  - 冒烟：三栏滚动标记全部就位（左树 / 中编辑 / 右聊天 / 输入条恒定 / 回退 textarea）
+- **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
+
+## 迭代 7 切片 7.2 体验修复 4：Web 恒流式 + 滚动兜底
+
+- **时间**：2026-08-29
+- **给 Agent 的任务**（用户反馈）：完整检查代码逻辑——滚轮未正确实现；agent 回复的流式输出失效
+- **排查结论**：
+  - 流式失效根因：`Config.stream` 默认 False（需 `DEEPSEEK_STREAM` 显式开启），`/events` 走 `run()` 时过程日志与最终答复全部缓冲到结尾一次性发出，前端表现为流式失效（后端链路本身未坏）
+  - 滚动隐患：滚动容器缺 `overscroll-behavior`（滚到底后滚轮无效区间）；工作区管理器卡片在矮窗口下超高且无滚动；Monaco 在 flex 容器中 `automaticLayout` 偶发失效；另发现 `saveMessages` 并发丢消息（`[DONE]` 落盘可能被进行中的保存跳过）
+- **Agent 修改了什么**：
+  - `agent/web.py`：`/events` worker 用 `dataclasses.replace(config, stream=True)` 强制流式（CLI 不变）；`#tree-root`/`#chat-history`/`.fv-ta` 加 `overscroll-behavior: contain`；`.mgr-card` 加 `max-height: 92vh; overflow-y: auto`；Monaco 创建后 `setTimeout(editor.layout, 50)` + window resize 重排；`saveMessages` 改 pending 队列（保存中收到新请求则排队补存）
+  - `tests/test_web.py`：`test_web_sse_stream` 适配强制流式（mock `chat_stream`）；新增 `test_web_sse_streams_incrementally`（配置 stream=False 时仍逐块推送、顺序一致）
+- **检查证据**：
+  - `pytest -q` → **74 passed**（含增量流式测试：4 块逐块到达 + `[DONE]` 收尾）
+  - Node DOM 垫片真实执行前端流式链路（enterMain → sendTask → 分块追加 → `[DONE]` 完成标记）→ **JSFLOW OK**（无运行时错误）
+  - 冒烟标记：`overscroll-behavior` ×3、`max-height: 92vh`、`editor.layout()`、`savePending`、`dataclasses.replace(config, stream=True)` 全部就位
+- **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
+
+## 迭代 7 切片 7.2 体验修复 5：布局全链路加固 + 缩放自适应
+
+- **时间**：2026-08-29
+- **给 Agent 的任务**（用户反馈）：所有栏的页面都无法正常滚动；缩放网页大小时 agent 对话框消失
+- **根因分析**：
+  - 缩放消失：三栏宽度为固定像素（240/380px），浏览器缩放时视口 CSS 宽度变小，右栏被推出视口右侧被 `overflow: hidden` 裁掉——缩放越大对话框越「消失」
+  - 滚动失效：布局高度依赖隐式 flex 推导（`#main`/`#content` 无显式高度、`.pane` 无 min-height/min-width 约束），任一环节失效则滚动容器得不到确定高度；另缺防旧页缓存头
+- **Agent 修改了什么**（`agent/web.py`）：
+  - 显式高度链：`body` 100vh/100dvh；`#main` height 100vh/100dvh + min-height 0 + overflow hidden；`#content` `height: 0 + flex: 1 + min-height: 0`（内容永不撑高容器）；`.pane` 补 min-height/min-width 0；`#topbar` flex-shrink 0 + overflow hidden；`#welcome` overflow auto
+  - 缩放自适应：`initSplitters` 内新增 `clamp`——左右栏宽 ≤ `max(140, 38vw)`，启动与 resize 时回收并写回 localStorage，右栏永不越界；`.ws-chip` max-width 45vw + `#ws-name` 超长省略号
+  - `/` 响应加 `Cache-Control: no-store`（防旧页缓存）
+- **检查证据**：
+  - `pytest -q` → **74 passed**（无回归）
+  - 冒烟：HTTP 实测 `/` 响应头 `Cache-Control: no-store`；布局标记（100dvh / height:0 / .pane 双 min / 45vw / 38vw / topbar flex-shrink）全部就位
+  - `node --check` 内嵌 JS → 语法通过；Node DOM 垫片流式链路回归 → **JSFLOW OK**
+- **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
+
+## 迭代 7 切片 7.2 体验修复 6：步骤观测乱码
+
+- **时间**：2026-08-29
+- **给 Agent 的任务**（用户反馈）：每个步骤显示时出现乱码
+- **根因**：`execute_command` 用单一 `encoding="utf-8", errors="replace"` 解码全部输出——Windows 下 `cmd` 内置命令（dir/echo/type）按控制台代码页（中文系统 GBK/CP936）输出，UTF-8 解码失败处全部变 `�` 乱码（Python 子进程因 PYTHONUTF8 输出 UTF-8 不受影响）
+- **Agent 修改了什么**：
+  - `agent/tools/shell_tools.py`：`execute_command` 改字节捕获（去掉 text=True/encoding）；新增 `_decode` 回退链——UTF-8 优先 → `locale.getpreferredencoding` → GBK → 容错替换；stdout/stderr 分别解码
+  - `tests/test_tools.py`：`test_decode_fallback`（UTF-8 / GBK 回退 / 显式编码列表 / 全失败容错 4 断言）+ `test_execute_command_decodes_cmd_codepage_output`（模拟 GBK 字节输出还原「中文GBK」）
+- **检查证据**：
+  - `pytest -q` → **76 passed**（74 + 2 新增）
+  - 真实命令冒烟：Python UTF-8 中文输出 ✓；GBK 字节输出还原 `中文GBK`（无 `�`）✓
+- **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）

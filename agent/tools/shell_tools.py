@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import locale
 import os
 import re
 import subprocess
@@ -23,6 +24,22 @@ def is_dangerous(command: str) -> bool:
     return any(re.search(p, command, re.IGNORECASE) for p in DANGEROUS_PATTERNS)
 
 
+def _decode(data: bytes, encodings: list[str] | None = None) -> str:
+    """命令输出解码：UTF-8 优先，回退系统本地编码与 GBK（Windows 控制台代码页），最后容错替换。
+
+    Python 子进程（PYTHONUTF8=1）输出 UTF-8；cmd 内置命令（dir/echo/type）按控制台
+    代码页（中文系统 CP936/GBK）输出——按单一 UTF-8 解码会产生乱码，故逐级回退。
+    """
+    if encodings is None:
+        encodings = ["utf-8", locale.getpreferredencoding(False), "gbk"]
+    for enc in encodings:
+        try:
+            return data.decode(enc)
+        except (UnicodeDecodeError, LookupError):
+            continue
+    return data.decode("utf-8", errors="replace")
+
+
 def _truncate(s: str, limit: int) -> str:
     if len(s) <= limit:
         return s
@@ -40,20 +57,19 @@ def execute_command(arguments: dict, workdir: str) -> str:
             cwd=workdir,
             timeout=timeout,
             capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
             env=env,
         )
     except subprocess.TimeoutExpired:
         return f"错误：命令超时（>{timeout} 秒）"
     except OSError as exc:
         return f"错误：命令执行失败 {exc}"
+    stdout = _decode(proc.stdout)
+    stderr = _decode(proc.stderr)
     parts = []
-    if proc.stdout:
-        parts.append(_truncate(proc.stdout.rstrip(), MAX_OUTPUT_CHARS))
-    if proc.stderr:
-        parts.append("[stderr]\n" + _truncate(proc.stderr.rstrip(), MAX_OUTPUT_CHARS))
+    if stdout:
+        parts.append(_truncate(stdout.rstrip(), MAX_OUTPUT_CHARS))
+    if stderr:
+        parts.append("[stderr]\n" + _truncate(stderr.rstrip(), MAX_OUTPUT_CHARS))
     parts.append(f"[exit_code: {proc.returncode}]")
     return "\n".join(parts)
 

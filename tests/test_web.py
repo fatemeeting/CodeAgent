@@ -133,7 +133,13 @@ def test_web_sse_stream():
     thread.start()
     port = server.server_address[1]
     client = mock.Mock()
-    client.chat.return_value = _response("完成")
+
+    def chat_stream(messages, tools=None):
+        print("完成", end="", flush=True)
+        print()
+        return _response("完成")
+
+    client.chat_stream = mock.Mock(side_effect=chat_stream)
     try:
         with mock.patch("agent.web.LLMClient", return_value=client):
             with urllib.request.urlopen(f"http://127.0.0.1:{port}/events?task=hi") as resp:
@@ -144,6 +150,43 @@ def test_web_sse_stream():
     assert "data:" in raw
     assert "完成" in raw
     assert "[DONE]" in raw
+
+
+def test_web_sse_streams_incrementally():
+    """配置 stream=False 时 Web 仍逐块推送（强制流式）。"""
+    import time as _time
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), AgentHandler)
+    server.config = _config()  # stream=False（默认）
+    server.workdir = "."
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = server.server_address[1]
+    client = mock.Mock()
+
+    def chat_stream(messages, tools=None):
+        for piece in ["你", "好", "，", "世界"]:
+            print(piece, end="", flush=True)
+            _time.sleep(0.05)
+        print()
+        return _response("你好，世界")
+
+    client.chat_stream = mock.Mock(side_effect=chat_stream)
+    frames = []
+    try:
+        with mock.patch("agent.web.LLMClient", return_value=client):
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/events?task=hi") as resp:
+                for raw_line in resp:
+                    line = raw_line.decode("utf-8").strip()
+                    if line.startswith("data: "):
+                        frames.append(line[6:])
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert frames[-1] == "[DONE]"
+    chunks = [json.loads(f)["text"] for f in frames[:-1]]
+    chunks = [c for c in chunks if c.strip()]  # 过滤补换行空帧
+    assert chunks == ["你", "好", "，", "世界"], chunks  # 逐块到达、顺序一致
 
 
 def test_web_tree(tmp_path):
@@ -226,6 +269,49 @@ def test_web_exec(tmp_path):
         assert r["ok"] is True
         assert r["dangerous"] is True
         r = post({"workdir": str(tmp_path / "nope"), "command": "echo x"})
+        assert r["ok"] is False
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_web_save_file(tmp_path):
+    server = ThreadingHTTPServer(("127.0.0.1", 0), AgentHandler)
+    server.config = _config()
+    server.workdir = "."
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = server.server_address[1]
+    (tmp_path / "a.py").write_text("old", encoding="utf-8")
+
+    def post(payload):
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{port}/save-file",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+
+    try:
+        # 覆盖写入
+        r = post({"workdir": str(tmp_path), "path": "a.py", "content": "print(2)"})
+        assert r["ok"] is True and r["name"] == "a.py"
+        assert (tmp_path / "a.py").read_text(encoding="utf-8") == "print(2)"
+        # 子目录新建
+        r = post({"workdir": str(tmp_path), "path": "sub/b.py", "content": "x"})
+        assert r["ok"] is True
+        assert (tmp_path / "sub" / "b.py").read_text(encoding="utf-8") == "x"
+        # 越界拒绝
+        r = post({"workdir": str(tmp_path), "path": "../evil.py", "content": "bad"})
+        assert r["ok"] is False
+        assert "越界" in r["error"]
+        assert not (tmp_path.parent / "evil.py").exists()
+        # 工作区不存在
+        r = post({"workdir": str(tmp_path / "nope"), "path": "a.py", "content": "x"})
+        assert r["ok"] is False
+        # 缺少 path
+        r = post({"workdir": str(tmp_path), "content": "x"})
         assert r["ok"] is False
     finally:
         server.shutdown()

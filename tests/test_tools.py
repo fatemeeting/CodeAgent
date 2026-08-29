@@ -3,7 +3,7 @@
 import sys
 
 from agent.tools import TOOLS, dispatch, tool_schemas
-from agent.tools.shell_tools import is_dangerous
+from agent.tools.shell_tools import _decode, is_dangerous
 
 
 def test_six_tools_registered():
@@ -72,6 +72,24 @@ def test_execute_command(tmp_path):
     out = dispatch("execute_command", {"command": "echo hello", "timeout": 10}, str(tmp_path))
     assert "hello" in out
     assert "[exit_code: 0]" in out
+
+
+def test_decode_fallback():
+    assert _decode("中文".encode("utf-8")) == "中文"  # UTF-8 优先
+    assert _decode("中文".encode("gbk")) == "中文"  # 回退 GBK（Windows 控制台代码页）
+    assert _decode("中文".encode("gbk"), ["latin-1"]) != "中文"  # 显式编码列表优先
+    out = _decode(b"\xff\xfe\x80")  # 全部失败 → 容错替换
+    assert "\ufffd" in out
+
+
+def test_execute_command_decodes_cmd_codepage_output(tmp_path):
+    """模拟 cmd 控制台代码页（GBK）字节输出，应回退解码而非乱码。"""
+    cmd = (
+        f'"{sys.executable}" -c '
+        + '"import sys; sys.stdout.buffer.write(\'中文GBK\'.encode(\'gbk\'))"'
+    )
+    out = dispatch("execute_command", {"command": cmd, "timeout": 15}, str(tmp_path))
+    assert "中文GBK" in out  # GBK 回退解码还原，无乱码
 
 
 def test_execute_command_captures_failure(tmp_path):
