@@ -1,22 +1,21 @@
-# gate-checklist.md — 迭代 6 v2 · 切片 6.8 放行清单
+# gate-checklist.md — 迭代 6 v2 · 精简与美化 放行清单
 
-> 当前阶段：迭代 6 v2 · 切片 6.8（Editor Window + 终端）。放行决定：通过 / 重试 / 降级 / 停止。
+> 当前阶段：迭代 6 v2 · 精简与美化（终端移除 + 聊天框美化）。放行决定：通过 / 重试 / 降级 / 停止。
 
 ## 必过项
 
-- [x] Editor Window 三栏：文件树 | Monaco（CDN，离线回退）| 聊天
-- [x] 底部终端：`POST /exec` 复用 `execute_command`，含 dangerous 标记，可折叠
-- [x] 模式一键切换且对话状态不丢（消息重放）
-- [x] `/tree?deep=1` 递归文件树
-- [x] 既有功能不回归；`pytest -q` 全绿
+- [x] 终端面板模块完全移除（HTML / CSS / JS 无残留）
+- [x] `POST /exec` 端点保留且测试通过（无 UI 引用）
+- [x] 聊天框：胶囊圆角发送按钮 + 角色标签（你 / Agent）+ 消息置顶 + 空状态提示
+- [x] `pytest -q` 全绿；整页 JS `node --check` 语法通过
 
 ## 证据位置
 
-- 测试与冒烟：见 `docs/AGENT_LOG.md` 迭代 6 v2 切片 6.8 条目
+- 测试与冒烟：见 `docs/AGENT_LOG.md` 迭代 6 v2 精简与美化条目
 - 代码：`agent/web.py`、`tests/test_web.py`
 
 ## 退出决定
 
-- 通过 → 迭代 6 v2 完成（可做 6.9 主题/持久化，或收尾）
+- 通过 → 迭代 6 v2 收尾（可做 6.9 主题 / 持久化）
 - 重试 → 补齐缺失项后复查
 - 停止 → 记录原因

@@ -115,7 +115,7 @@
 ## P. 迭代 6 v2（Editor Window · 切片 6.8）
 
 - [x] P1 Editor 三栏：文件树 | Monaco（CDN，离线回退）| 聊天
-- [x] P2 底部终端：`/exec` 复用 execute_command + dangerous 标记 + 可折叠
+- [x] P2 `POST /exec` 命令端点（复用 execute_command + dangerous 标记；终端 UI 后按用户要求移除，端点保留）
 - [x] P3 模式一键切换且对话状态不丢（消息重放）
 - [x] P4 `/tree?deep=1` 递归文件树
 
@@ -138,3 +138,8 @@
 
 - [x] T1 逐栏 try/catch 隔离：任一栏构建失败不影响其它栏
 - [x] T2 Monaco 加载防御：async 加载、双 CDN 兜底、8 秒超时回退行号视图
+
+## U. 迭代 6 v2 精简与美化（终端移除 + 聊天框）
+
+- [x] U1 终端面板模块完全移除（HTML/CSS/JS 无残留）
+- [x] U2 聊天框美化：胶囊圆角发送按钮 + 角色标签（你/Agent）+ 消息置顶 + 空状态提示

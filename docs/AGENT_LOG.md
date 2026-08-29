@@ -402,4 +402,17 @@
   - `node --check` 提取的整页 JS → 语法通过（EXIT=0）
   - `pytest -q` → **65 passed**
   - 冒烟：async loader/双 CDN 兜底/超时回退/逐栏隔离/容错标记全部就位
-- **人工放行决定**：（待用户确认：通过 / 重试 / 降级 / 停止）
+- **人工放行决定**：通过
+
+## 迭代 6 v2 精简与美化：终端移除 + 聊天框
+
+- **时间**：2026-08-28
+- **给 Agent 的任务**：① 不再需要终端模块；② 右侧聊天框美化（圆角发送、消息位置上移等）
+- **Agent 修改了什么**（`agent/web.py`）：
+  - 删除 `#terminal-panel` 的 HTML/CSS/JS（`buildTerminal`/`runTerm`/`appendTerm`/`toggleTerminal` 全部清除，页面 `terminal` 出现 0 次）；`POST /exec` 端点与测试保留（无 UI 引用）
+  - 聊天框美化：`.send-btn` 胶囊圆角（`border-radius: 999px`）、输入框圆角 14px + 聚焦橙色描边、角色标签（你 / Agent）、消息置顶排列（`.msg-col`）、空状态提示（`.chat-hint`，首条消息后消失）
+- **检查证据**：
+  - `pytest -q` → **65 passed**
+  - `node --check` 提取整页 JS → 语法通过（EXIT=0）
+  - 页面标记核查：终端残留 0、美化标记全部就位
+- **人工放行决定**：通过（代码由用户自行提交，commit `7b09486`）
