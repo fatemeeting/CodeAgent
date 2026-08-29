@@ -8,6 +8,7 @@ from http.server import ThreadingHTTPServer
 from unittest import mock
 
 from agent.config import Config
+from agent.sessions import SessionStore
 from agent.web import AgentHandler, run_task_output
 
 
@@ -226,6 +227,60 @@ def test_web_exec(tmp_path):
         assert r["dangerous"] is True
         r = post({"workdir": str(tmp_path / "nope"), "command": "echo x"})
         assert r["ok"] is False
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_web_sessions(tmp_path):
+    server = ThreadingHTTPServer(("127.0.0.1", 0), AgentHandler)
+    server.config = _config()
+    server.workdir = "."
+    server.sessions = SessionStore(tmp_path / "data" / "sessions")
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = server.server_address[1]
+    base = f"http://127.0.0.1:{port}"
+
+    def post(path, payload):
+        req = urllib.request.Request(
+            base + path,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+
+    def get(path):
+        with urllib.request.urlopen(base + path) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+
+    try:
+        # 新建
+        r = post("/sessions", {"workspace": str(tmp_path), "name": "会话A"})
+        assert r["ok"] is True
+        sid = r["session"]["id"]
+        # 列表
+        r = get("/sessions")
+        assert r["ok"] is True and any(s["id"] == sid for s in r["sessions"])
+        # 详情
+        r = get(f"/sessions/{sid}")
+        assert r["ok"] is True and r["session"]["name"] == "会话A"
+        # 存消息
+        r = post(f"/sessions/{sid}/messages", {"messages": [{"role": "user", "content": "x"}]})
+        assert r["ok"] is True and len(r["session"]["messages"]) == 1
+        # 重命名
+        r = post(f"/sessions/{sid}", {"name": "改名"})
+        assert r["ok"] is True and r["session"]["name"] == "改名"
+        # 非法 id
+        r = get("/sessions/nope")
+        assert r["ok"] is False
+        # 删除
+        req = urllib.request.Request(base + f"/sessions/{sid}", method="DELETE")
+        with urllib.request.urlopen(req) as resp:
+            r = json.loads(resp.read().decode("utf-8"))
+        assert r["ok"] is True
+        assert get("/sessions")["sessions"] == []
     finally:
         server.shutdown()
         server.server_close()

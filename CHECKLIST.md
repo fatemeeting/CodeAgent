@@ -143,3 +143,9 @@
 
 - [x] U1 终端面板模块完全移除（HTML/CSS/JS 无残留）
 - [x] U2 聊天框美化：胶囊圆角发送按钮 + 角色标签（你/Agent）+ 消息置顶 + 空状态提示
+
+## V. 迭代 7 切片 7.1 会话后端（JSON 存储 + CRUD 端点）
+
+- [x] V1 `agent/sessions.py` `SessionStore`：`data/sessions/<id>.json` + `index.json`，线程安全（RLock），名称净化与 id 去重
+- [x] V2 REST 端点：GET `/sessions`、GET `/sessions/<id>`、POST `/sessions`、POST `/sessions/<id>`（重命名）、POST `/sessions/<id>/messages`、DELETE `/sessions/<id>`，统一 `{ok, ...}` 响应
+- [x] V3 `data/` 加入 `.gitignore`；测试覆盖（`test_sessions.py` 6 项 + `test_web_sessions` 1 项），72 passed + 真实服务冒烟通过

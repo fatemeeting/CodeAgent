@@ -103,4 +103,10 @@ coding-agent/
 4. **聊天式 Web 界面**：模仿 DeepSeek Harness 的对话式布局（消息气泡 + 流式过程 + 工作区选择）。
 5. **原生文件夹选择器**：Web 端「📂 选择」按钮 → 服务端用 tkinter（标准库）唤起系统文件夹选择对话框，返回路径填入工作区。
 6. **Cursor 风格重写（v2）**：暖白视觉系统（`#f7f7f4` / `#26251e` / `#f54e00`、8px 间距）；**工作区管理器**（选择 / 确认 / 管理三要素 + 最近列表 + 目录校验，未选工作区不显示其它内容）；**Editor Window 布局**（左文件树 | 中 Monaco 代码编辑（CDN，文件名 tab 按需显示）| 右 AI 聊天，三栏宽度可拖拽）；代码编辑器走 CDN Monaco（B 策略，前端运行时资源，不进入 Python 依赖）。
+
+## 12. 迭代 7（持久化管理：Session + 工作区 + 对话记录）
+
+1. **服务端会话存储（决策：JSON 文件）**：`agent/sessions.py` 的 `SessionStore`——`data/sessions/<id>.json` 单文件一会话 + `index.json` 索引，线程安全（RLock）；会话绑定工作区。
+2. **Session CRUD 端点**：`GET/POST /sessions`、`GET/DELETE /sessions/<id>`、`POST /sessions/<id>/messages`（全量保存消息）。
+3. **前端会话管理与恢复**（切片 7.2/7.3）：会话列表 / 新建 / 切换 / 重命名 / 删除；刷新后恢复最近会话（消息重放 + 工作区 + 当前文件）。
 ```

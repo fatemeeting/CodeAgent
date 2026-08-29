@@ -1,21 +1,21 @@
-# gate-checklist.md — 迭代 6 v2 · 精简与美化 放行清单
+# gate-checklist.md — 迭代 7 · 切片 7.1 放行清单
 
-> 当前阶段：迭代 6 v2 · 精简与美化（终端移除 + 聊天框美化）。放行决定：通过 / 重试 / 降级 / 停止。
+> 当前阶段：迭代 7 · 切片 7.1（Session 后端）。放行决定：通过 / 重试 / 降级 / 停止。
 
 ## 必过项
 
-- [x] 终端面板模块完全移除（HTML / CSS / JS 无残留）
-- [x] `POST /exec` 端点保留且测试通过（无 UI 引用）
-- [x] 聊天框：胶囊圆角发送按钮 + 角色标签（你 / Agent）+ 消息置顶 + 空状态提示
-- [x] `pytest -q` 全绿；整页 JS `node --check` 语法通过
+- [x] `SessionStore`：创建 / 列表（按 updated_at 倒序）/ 读取 / 重命名 / 删除 / 全量存消息，线程安全
+- [x] `/sessions` 端点：GET 列表 / POST 新建 / GET 详情 / POST 消息 / DELETE 删除，非法 id 报错
+- [x] `data/` 加入 `.gitignore`（会话数据不入库）
+- [x] `pytest -q` 全绿（72 passed）；真实服务冒烟通过
 
 ## 证据位置
 
-- 测试与冒烟：见 `docs/AGENT_LOG.md` 迭代 6 v2 精简与美化条目
-- 代码：`agent/web.py`、`tests/test_web.py`
+- 测试与冒烟：见 `docs/AGENT_LOG.md` 迭代 7 切片 7.1 条目
+- 代码：`agent/sessions.py`、`agent/web.py`、`tests/test_sessions.py`、`tests/test_web.py`
 
 ## 退出决定
 
-- 通过 → 迭代 6 v2 收尾（可做 6.9 主题 / 持久化）
+- 通过 → 切片 7.2（前端会话管理 UI + 消息落盘）
 - 重试 → 补齐缺失项后复查
 - 停止 → 记录原因

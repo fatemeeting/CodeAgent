@@ -416,3 +416,17 @@
   - `node --check` 提取整页 JS → 语法通过（EXIT=0）
   - 页面标记核查：终端残留 0、美化标记全部就位
 - **人工放行决定**：通过（代码由用户自行提交，commit `7b09486`）
+
+## 迭代 7 切片 7.1：会话持久化后端（JSON 存储 + CRUD 端点）
+
+- **时间**：2026-08-29
+- **给 Agent 的任务**：迭代 7 持久化管理 · 切片 7.1 会话后端——服务端 JSON 存储（`data/sessions/`），会话模型 + REST CRUD 端点，会话绑定工作区
+- **Agent 修改了什么**：
+  - 新建 `agent/sessions.py`：`SessionStore`——每会话一个 `<id>.json` + `index.json` 索引；`threading.RLock` 线程安全；id = `s+时间戳`（碰撞加 `x` 后缀）；名称净化（换行→空格、去首尾空白、截断 24 字、空名兜底「新会话」）；`list_sessions` 按 `updated_at` 倒序
+  - `agent/web.py`：`server.sessions = SessionStore()`（惰性兜底）；新增 GET `/sessions`（列表）、GET `/sessions/<id>`（详情）、POST `/sessions`（新建）、POST `/sessions/<id>`（重命名）、POST `/sessions/<id>/messages`（全量存消息）、DELETE `/sessions/<id>`；统一 `{ok, ...}` 响应包装，缺失会话返回 `ok:false`
+  - `.gitignore`：新增「会话数据」节，追加 `data/`
+  - 测试：新建 `tests/test_sessions.py`（6 项：创建/列表、缺失读取、消息跨实例持久化、删除、重命名净化、列表排序）+ `tests/test_web.py::test_web_sessions`（HTTP 全 CRUD 往返）
+- **检查证据**：
+  - `pytest -q` → **72 passed**（此前 65）
+  - 真实服务器冒烟（`127.0.0.1:8420`，临时数据目录）：list empty → create → get → save messages → rename → delete → 缺失 get 返回 `ok:false` → list empty，全链路 `SMOKE ALL OK`
+- **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）

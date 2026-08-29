@@ -1,21 +1,22 @@
 # context-pack.md — 当前阶段上下文包
 
-> 当前阶段：**迭代 6 v2 · 完成（Cursor 风格单窗口 IDE）**
+> 当前阶段：**迭代 7 · 切片 7.1（Session 后端：模型 + CRUD 端点）**
 
-## 本阶段已完成
+## 当前阶段目标
 
-- 切片 6.6 工作区管理器 + 视觉系统：整页管理器（选择 / 确认 / 管理 + 校验）+ 暖白 / 橙视觉
-- 切片 6.8 Editor Window：文件树 | Monaco（CDN，离线回退）| 聊天，三栏宽度可拖拽
-- 精简与美化：删除 Agent Window / 模式切换 / 文件下拉框 / 终端面板；聊天框（胶囊圆角发送、角色标签、消息置顶、空状态提示）
-- （切片 6.7 Agent Window 曾实现，后按用户要求移除，仅保留 Editor 布局）
+服务端会话存储：`agent/sessions.py` 的 `SessionStore`（JSON 文件 + 索引、线程安全）；`agent/web.py` 增 `/sessions` 系列端点；`data/` 入 `.gitignore`。前端 UI 与恢复在 7.2/7.3。
 
-## 下一阶段（迭代 6.9 可选 / 迭代 7）
+## 必须读
 
-- 6.9（可选）：深 / 浅主题切换、布局持久化
-- 迭代 7：命令沙箱（真正隔离）/ 多 provider
-- 开工前先写：SPEC 增项 + CHECKLIST 增项 + 本 context-pack，再动代码
+- `SPEC.md`（迭代 7 范围）
+- `agent/web.py`（`do_GET` / `do_POST` 路由结构与 `serve`）
+- `docs/context-snapshot.md`
 
 ## 不得读 / 不得改
 
 - `.env`（真实凭据）
-- 已放行代码（除非必要最小修改）
+
+## 输出要求
+
+- 产出：`agent/sessions.py`、`agent/web.py`（端点 + `server.sessions`）、`tests/test_sessions.py`、`tests/test_web.py`（+session 端点）、`.gitignore`（+`data/`）
+- 验收：`pytest -q` 全绿；冒烟（建会话/存消息/删除）

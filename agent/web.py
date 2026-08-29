@@ -18,6 +18,7 @@ from pathlib import Path
 from .config import Config
 from .llm import LLMClient
 from .loop import run
+from .sessions import SessionStore
 from .tools.shell_tools import execute_command, is_dangerous
 
 INDEX_HTML = """<!DOCTYPE html>
@@ -783,6 +784,8 @@ class AgentHandler(BaseHTTPRequestHandler):
             self._handle_tree()
         elif self.path.startswith("/file"):
             self._handle_file()
+        elif self.path.startswith("/sessions"):
+            self._handle_sessions_get()
         else:
             self.send_error(404)
 
@@ -937,8 +940,92 @@ class AgentHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(data)))
             self.end_headers()
             self.wfile.write(data)
+        elif self.path.startswith("/sessions"):
+            self._handle_sessions_post()
         else:
             self.send_error(404)
+
+    def do_DELETE(self):  # noqa: N802 - 会话删除
+        parts = [p for p in urllib.parse.urlparse(self.path).path.split("/") if p]
+        if len(parts) == 2 and parts[0] == "sessions":
+            ok = self._sessions().delete_session(parts[1])
+            result = {"ok": True} if ok else {"ok": False, "error": f"会话不存在：{parts[1]}"}
+        else:
+            self.send_error(404)
+            return
+        data = json.dumps(result, ensure_ascii=False).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    # ---------- 会话端点 ----------
+    def _sessions(self) -> SessionStore:
+        if not hasattr(self.server, "sessions"):
+            self.server.sessions = SessionStore()
+        return self.server.sessions
+
+    def _write_json(self, result: dict) -> None:
+        data = json.dumps(result, ensure_ascii=False).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _handle_sessions_get(self) -> None:
+        parts = [p for p in urllib.parse.urlparse(self.path).path.split("/") if p]
+        try:
+            if len(parts) == 1:
+                result = {"ok": True, "sessions": self._sessions().list_sessions()}
+            elif len(parts) == 2:
+                session = self._sessions().get_session(parts[1])
+                result = (
+                    {"ok": True, "session": session}
+                    if session is not None
+                    else {"ok": False, "error": f"会话不存在：{parts[1]}"}
+                )
+            else:
+                self.send_error(404)
+                return
+        except Exception as exc:  # noqa: BLE001
+            result = {"ok": False, "error": str(exc)}
+        self._write_json(result)
+
+    def _handle_sessions_post(self) -> None:
+        parts = [p for p in urllib.parse.urlparse(self.path).path.split("/") if p]
+        length = int(self.headers.get("Content-Length", 0))
+        body = json.loads(self.rfile.read(length) or b"{}")
+        try:
+            if len(parts) == 1:  # POST /sessions 新建
+                workspace = str(body.get("workspace") or self.server.workdir)
+                name = str(body.get("name") or "")
+                result = {"ok": True, "session": self._sessions().create_session(workspace, name)}
+            elif len(parts) == 3 and parts[2] == "messages":  # POST /sessions/<id>/messages
+                messages = body.get("messages")
+                if not isinstance(messages, list):
+                    raise ValueError("messages 应为列表")
+                session = self._sessions().save_messages(parts[1], messages)
+                result = (
+                    {"ok": True, "session": session}
+                    if session is not None
+                    else {"ok": False, "error": f"会话不存在：{parts[1]}"}
+                )
+            elif len(parts) == 2:  # POST /sessions/<id> 重命名
+                name = str(body.get("name") or "")
+                session = self._sessions().rename_session(parts[1], name)
+                result = (
+                    {"ok": True, "session": session}
+                    if session is not None
+                    else {"ok": False, "error": f"会话不存在：{parts[1]}"}
+                )
+            else:
+                self.send_error(404)
+                return
+        except Exception as exc:  # noqa: BLE001
+            result = {"ok": False, "error": str(exc)}
+        self._write_json(result)
 
     def log_message(self, format, *args):  # noqa: A002 - 静默访问日志
         pass
@@ -948,6 +1035,7 @@ def serve(config: Config, workdir: str = ".", host: str = "127.0.0.1", port: int
     server = ThreadingHTTPServer((host, port), AgentHandler)
     server.config = config
     server.workdir = workdir
+    server.sessions = SessionStore()
     print(f"Web 界面已启动：http://{host}:{port}")
     try:
         server.serve_forever()

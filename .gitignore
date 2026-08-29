@@ -30,3 +30,6 @@ build/
 .github_known_hosts
 requirement_doc/
 coding-agent.old/
+
+# 会话数据（服务端持久化，用户资产不入库）
+data/
