@@ -118,3 +118,8 @@
 - [x] P2 底部终端：`/exec` 复用 execute_command + dangerous 标记 + 可折叠
 - [x] P3 模式一键切换且对话状态不丢（消息重放）
 - [x] P4 `/tree?deep=1` 递归文件树
+
+## Q. 迭代 6 v2 修复（Markdown 渲染 + 代码纯净）
+
+- [x] Q1 对话窗口渲染 Markdown（代码块/行内代码/粗体/标题/列表，零依赖）
+- [x] Q2 SYSTEM_PROMPT 禁止把 Markdown 标记写进代码文件

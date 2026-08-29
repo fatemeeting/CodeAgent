@@ -3,7 +3,12 @@
 from unittest import mock
 
 from agent.config import Config
-from agent.loop import run
+from agent.loop import SYSTEM_PROMPT, run
+
+
+def test_system_prompt_forbids_markdown_in_code_files():
+    assert "纯代码" in SYSTEM_PROMPT
+    assert "代码文件" in SYSTEM_PROMPT
 
 
 def _config(max_iterations=5):

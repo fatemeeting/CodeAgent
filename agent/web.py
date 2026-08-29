@@ -88,6 +88,11 @@ INDEX_HTML = """<!DOCTYPE html>
   .msg.agent .bubble { background: var(--surface); border: 1px solid var(--border); font-family: Consolas, "Courier New", monospace; }
   .tool { color: #b33a00; font-weight: 600; }
   .obs { color: var(--ok); }
+  .bubble pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px; margin: 4px 0; overflow-x: auto; }
+  .bubble code.ic { background: var(--code-bg); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; font-size: 12px; }
+  .bubble h1, .bubble h2, .bubble h3, .bubble h4 { margin: 6px 0 2px; font-size: 1.02em; }
+  .bubble ul { margin: 2px 0; padding-left: 18px; }
+  .bubble a { color: var(--accent); }
   /* 文件页（右栏） */
   #file-header { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 12px 16px 8px; }
   #file-tab { font-family: Consolas, monospace; font-size: 13px; font-weight: 600; background: var(--surface); border: 1px solid var(--border); border-radius: 6px 6px 0 0; padding: 6px 12px; }
@@ -314,15 +319,98 @@ function appendMsg(role, raw) {
 
 function renderBubble(bubble) {
   bubble.innerHTML = '';
-  bubble._raw.split('\\n').forEach(function (line, i) {
-    if (i > 0) bubble.appendChild(document.createElement('br'));
-    let node;
-    if (line.indexOf('[步骤') === 0) { node = document.createElement('span'); node.className = 'tool'; }
-    else if (line.indexOf('        ↳') === 0) { node = document.createElement('span'); node.className = 'obs'; }
-    else { node = document.createElement('span'); }
-    node.textContent = line;
-    bubble.appendChild(node);
+  const lines = bubble._raw.split('\\n');
+  let md = [];
+  const flush = () => {
+    if (md.length) { bubble.appendChild(renderMarkdown(md.join('\\n'))); md = []; }
+  };
+  lines.forEach(line => {
+    if (line.indexOf('[步骤') === 0 || line.indexOf('        ↳') === 0) {
+      flush();
+      const div = document.createElement('div');
+      const span = document.createElement('span');
+      span.className = line.indexOf('[步骤') === 0 ? 'tool' : 'obs';
+      span.textContent = line;
+      div.appendChild(span);
+      bubble.appendChild(div);
+    } else {
+      md.push(line);
+    }
   });
+  flush();
+}
+
+/* 零依赖迷你 Markdown 渲染：代码块 / 行内代码 / 粗体 / 标题 / 列表（textContent 构建，防 XSS） */
+function inlineNodes(text) {
+  const frag = document.createDocumentFragment();
+  let s = text;
+  while (s) {
+    const b = s.indexOf('**');
+    const c = s.indexOf('`');
+    if (b === -1 && c === -1) { frag.appendChild(document.createTextNode(s)); break; }
+    let pos, kind;
+    if (b !== -1 && (c === -1 || b < c)) { pos = b; kind = 'bold'; }
+    else { pos = c; kind = 'code'; }
+    if (pos > 0) frag.appendChild(document.createTextNode(s.slice(0, pos)));
+    const endTok = kind === 'bold' ? '**' : '`';
+    const end = s.indexOf(endTok, pos + endTok.length);
+    if (end === -1) { frag.appendChild(document.createTextNode(s.slice(pos))); break; }
+    const node = kind === 'bold' ? document.createElement('strong') : document.createElement('code');
+    if (kind === 'code') node.className = 'ic';
+    node.textContent = s.slice(pos + endTok.length, end);
+    frag.appendChild(node);
+    s = s.slice(end + endTok.length);
+  }
+  return frag;
+}
+
+function renderMarkdown(text) {
+  const frag = document.createDocumentFragment();
+  const lines = text.split('\\n');
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (line.startsWith('```')) {
+      const buf = [];
+      i++;
+      while (i < lines.length && !lines[i].startsWith('```')) { buf.push(lines[i]); i++; }
+      i++;
+      const pre = document.createElement('pre');
+      const code = document.createElement('code');
+      code.textContent = buf.join('\\n');
+      pre.appendChild(code);
+      frag.appendChild(pre);
+      continue;
+    }
+    const h = line.match(/^(#{1,4})\\s+(.*)$/);
+    if (h) {
+      const el = document.createElement('h' + h[1].length);
+      el.appendChild(inlineNodes(h[2]));
+      frag.appendChild(el);
+      i++;
+      continue;
+    }
+    const li = line.match(/^\\s*[-*]\\s+(.*)$/);
+    if (li) {
+      const ul = document.createElement('ul');
+      while (i < lines.length) {
+        const m2 = lines[i].match(/^\\s*[-*]\\s+(.*)$/);
+        if (!m2) break;
+        const item = document.createElement('li');
+        item.appendChild(inlineNodes(m2[1]));
+        ul.appendChild(item);
+        i++;
+      }
+      frag.appendChild(ul);
+      continue;
+    }
+    if (line.trim() === '') { i++; continue; }
+    const div = document.createElement('div');
+    div.appendChild(inlineNodes(line));
+    frag.appendChild(div);
+    i++;
+  }
+  return frag;
 }
 
 function sendTask() {

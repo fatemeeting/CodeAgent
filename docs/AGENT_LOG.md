@@ -352,4 +352,17 @@
   - `pytest -q` → **64 passed**
   - 冒烟：页面含 Monaco CDN/终端/文件树/重放/模式布局全部标记；`/exec` echo 正常 + dangerous 标记正确；`/tree?deep=1` 递归（sub/x.py）；`/file sub/x.py` 返回内容
 - **设计决策**：终端命令由用户直接输入（用户即确认者），故只标记危险不阻断；Monaco 走 CDN 且离线时优雅回退行号视图（B 策略）
+- **人工放行决定**：通过
+
+## 迭代 6 v2 修复：Markdown 渲染 + 代码纯净规则
+
+- **时间**：2026-08-28
+- **问题**：① 对话窗口把模型答复按纯文本显示，`**粗体**`/`- 列表`/```代码块``` 不渲染；② 未约束模型写文件格式，代码文件可能混入 Markdown 标记
+- **修复**：
+  - `agent/web.py`：`renderBubble` 重构——工具/观测行照旧着色，其余文本走**零依赖迷你 Markdown 渲染器**（`renderMarkdown`/`inlineNodes`：代码块、行内代码、粗体、标题、列表；全部用 `textContent` 构建，防 XSS）+ 气泡内 pre/code/ul 样式
+  - `agent/loop.py`：`SYSTEM_PROMPT` 增补规则——代码文件必须纯代码、符合语言规范可直接运行，严禁 Markdown 标记写入文件；最终总结可用 Markdown
+  - `tests/test_loop.py`（+1：SYSTEM_PROMPT 含纯净规则）
+- **检查证据**：
+  - `pytest -q` → **65 passed**
+  - 冒烟：页面含渲染器与样式标记；真实任务 `calc68.py` 内容纯净（无 ```/无 **/无 #），最终答复含 md 标记（前端将渲染）
 - **人工放行决定**：（待用户确认：通过 / 重试 / 降级 / 停止）
