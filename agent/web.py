@@ -69,13 +69,20 @@ INDEX_HTML = """<!DOCTYPE html>
   #pane-right { width: 380px; }
   .splitter { width: 4px; cursor: col-resize; background: var(--border); flex-shrink: 0; }
   .splitter:hover { background: var(--accent); }
-  #terminal-panel { display: flex; flex-direction: column; height: 180px; border-top: 1px solid var(--border); background: var(--surface); }
   #editor-host { flex: 1; min-height: 0; }
   .placeholder { color: var(--muted); font-size: 14px; display: flex; align-items: center; justify-content: center; height: 100%; border: 1px dashed var(--border); border-radius: 12px; margin: 16px; }
   /* 对话区（右侧聊天面板） */
-  #chat-history { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
-  #chat-inputbar { display: flex; gap: 8px; padding: 12px 16px; background: var(--surface); border-top: 1px solid var(--border); }
-  #chat-input { flex: 1; resize: none; height: 44px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; background: var(--bg); color: var(--text); }
+  #chat-history { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+  .chat-hint { color: var(--muted); font-size: 13px; padding: 2px 0; }
+  .msg-col { display: flex; flex-direction: column; max-width: 85%; }
+  .msg.user .msg-col { align-items: flex-end; }
+  .msg.agent .msg-col { align-items: flex-start; }
+  .role-label { font-size: 11px; color: var(--muted); margin-bottom: 3px; }
+  #chat-inputbar { display: flex; gap: 10px; padding: 12px 16px 16px; background: var(--surface); border-top: 1px solid var(--border); align-items: flex-end; }
+  #chat-input { flex: 1; resize: none; height: 44px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 14px; font-size: 13px; font-family: inherit; background: var(--bg); color: var(--text); outline: none; }
+  #chat-input:focus { border-color: var(--accent); }
+  .send-btn { padding: 10px 22px; background: var(--accent); color: #fff; border: none; border-radius: 999px; cursor: pointer; font-weight: 600; font-size: 13px; white-space: nowrap; }
+  .send-btn:hover { background: var(--accent-hover); }
   .msg { display: flex; }
   .msg.user { justify-content: flex-end; }
   .bubble { max-width: 85%; padding: 8px 12px; border-radius: 12px; white-space: pre-wrap; word-break: break-word; font-size: 13px; line-height: 1.55; }
@@ -101,16 +108,6 @@ INDEX_HTML = """<!DOCTYPE html>
   .tree-label:hover { background: var(--code-bg); }
   .tree-label.file { font-family: Consolas, monospace; }
   .tree-kids { padding-left: 14px; }
-  /* 终端（Editor 底部） */
-  #term-header { display: flex; justify-content: space-between; align-items: center; padding: 6px 16px; font-size: 12px; font-weight: 700; color: var(--muted); border-bottom: 1px solid var(--border); }
-  #term-toggle { cursor: pointer; color: var(--accent); font-weight: 600; }
-  #term-body { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-  #term-output { flex: 1; overflow: auto; padding: 8px 16px; font-family: Consolas, monospace; font-size: 12.5px; background: #1e1b16; color: #e8e4da; }
-  #term-output .term-warn { color: #ffb020; }
-  #term-output .term-err { color: #ff7a6e; }
-  #term-inputbar { display: flex; gap: 8px; padding: 6px 16px; border-top: 1px solid var(--border); align-items: center; }
-  #term-prompt { color: var(--accent); font-family: Consolas, monospace; font-weight: 700; }
-  #term-input { flex: 1; border: none; background: none; outline: none; font-family: Consolas, monospace; font-size: 13px; color: var(--text); }
   /* 弹层 */
   #modal { display: none; position: fixed; inset: 0; background: rgba(38,37,30,.45); align-items: center; justify-content: center; z-index: 10; padding: 24px; }
   #modal .mgr-card { box-shadow: 0 8px 40px rgba(38,37,30,.2); }
@@ -153,7 +150,6 @@ INDEX_HTML = """<!DOCTYPE html>
     <div class="splitter" id="split2"></div>
     <div id="pane-right" class="pane"></div>
   </div>
-  <div id="terminal-panel"></div>
 </div>
 <div id="modal"><div id="modal-card"></div></div>
 <script>
@@ -327,16 +323,17 @@ function buildLayout() {
   try { buildFileTree(); } catch (e) { console.error('buildFileTree', e); }
   try { buildEditor(); } catch (e) { console.error('buildEditor', e); }
   try { buildChat('pane-right'); } catch (e) { console.error('buildChat', e); }
-  try { buildTerminal(); } catch (e) { console.error('buildTerminal', e); }
 }
 
-/* ---------- 对话（Agent 左栏 / Editor 右栏复用；状态存 chatMessages 重放） ---------- */
+/* ---------- 对话（右侧聊天面板；状态存 chatMessages 重放） ---------- */
 function buildChat(containerId) {
   document.getElementById(containerId).innerHTML = `
-    <div id="chat-history"></div>
+    <div id="chat-history">
+      <div class="chat-hint">向 agent 发送编程任务，如「创建 hello.py 打印 Hello 并运行」</div>
+    </div>
     <div id="chat-inputbar">
       <textarea id="chat-input" placeholder="输入编程任务，Enter 发送（Shift+Enter 换行）"></textarea>
-      <button class="btn-accent" onclick="sendTask()">发送</button>
+      <button class="send-btn" onclick="sendTask()">发送</button>
     </div>`;
   chatMessages.forEach(m => appendMsg(m.role, m.raw));
   const h = document.getElementById('chat-history');
@@ -347,16 +344,25 @@ function buildChat(containerId) {
 }
 
 function appendMsg(role, raw) {
+  const history = document.getElementById('chat-history');
+  const hint = history.querySelector('.chat-hint');
+  if (hint) hint.remove();
   const wrap = document.createElement('div');
   wrap.className = 'msg ' + role;
+  const col = document.createElement('div');
+  col.className = 'msg-col';
+  const label = document.createElement('div');
+  label.className = 'role-label';
+  label.textContent = role === 'user' ? '你' : 'Agent';
+  col.appendChild(label);
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
   bubble._raw = raw;
-  wrap.appendChild(bubble);
-  document.getElementById('chat-history').appendChild(wrap);
+  col.appendChild(bubble);
+  wrap.appendChild(col);
+  history.appendChild(wrap);
   renderBubble(bubble);
-  const h = document.getElementById('chat-history');
-  h.scrollTop = h.scrollHeight;
+  history.scrollTop = history.scrollHeight;
   return bubble;
 }
 
@@ -655,65 +661,6 @@ function renderTreeNode(n) {
     div.appendChild(kids);
   }
   return div;
-}
-
-/* ---------- 终端（Editor 底部） ---------- */
-function buildTerminal() {
-  document.getElementById('terminal-panel').innerHTML = `
-    <div id="term-header">
-      <span>终端</span>
-      <span id="term-toggle" onclick="toggleTerminal()">折叠</span>
-    </div>
-    <div id="term-body">
-      <div id="term-output"></div>
-      <div id="term-inputbar">
-        <span id="term-prompt">&gt;</span>
-        <input id="term-input" placeholder="执行命令，如 python main.py">
-      </div>
-    </div>`;
-  document.getElementById('term-input').addEventListener('keydown', function (e) {
-    if (e.key === 'Enter') { e.preventDefault(); runTerm(); }
-  });
-}
-
-function toggleTerminal() {
-  const body = document.getElementById('term-body');
-  const toggle = document.getElementById('term-toggle');
-  if (body.style.display === 'none') { body.style.display = ''; toggle.textContent = '折叠'; }
-  else { body.style.display = 'none'; toggle.textContent = '展开'; }
-}
-
-async function runTerm() {
-  const input = document.getElementById('term-input');
-  const cmd = input.value.trim();
-  if (!cmd) return;
-  input.value = '';
-  appendTerm('$ ' + cmd);
-  try {
-    const resp = await fetch('/exec', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({workdir: state.workspace, command: cmd}),
-    });
-    const data = await resp.json();
-    if (data.ok) {
-      if (data.dangerous) appendTerm('⚠️ 检测到危险命令', 'warn');
-      appendTerm(data.output);
-    } else {
-      appendTerm('错误：' + data.error, 'err');
-    }
-  } catch (e) {
-    appendTerm('请求失败：' + e, 'err');
-  }
-}
-
-function appendTerm(text, cls) {
-  const out = document.getElementById('term-output');
-  const div = document.createElement('div');
-  if (cls) div.className = 'term-' + cls;
-  div.textContent = text;
-  out.appendChild(div);
-  out.scrollTop = out.scrollHeight;
 }
 
 (async function boot() {
