@@ -1,19 +1,22 @@
 # context-pack.md — 当前阶段上下文包
 
-> 当前阶段：**迭代 6 优化 · 完成（工作区先行 + 聊天式界面 + 原生文件夹选择器）**
+> 当前阶段：**迭代 6 v2 · 切片 6.6（工作区管理器 + 视觉系统）**
 
-## 本阶段已完成
+## 当前阶段目标
 
-- 切片 6.3 工作区先行：REPL `/workdir`（提示符显示）+ Web workdir 参数校验
-- 切片 6.4 聊天式界面：气泡 + 流式 + 工具着色，模仿 DeepSeek Harness
-- 切片 6.5 原生文件夹选择器：tkinter `askdirectory` + `/pick-workspace`
+重写 Web 端为 Cursor 风格（B 策略：编辑器用 CDN Monaco，本切片暂不加载）：暖白视觉系统（#f7f7f4 / #26251e / #f54e00、8px 间距）；**专用工作区管理器**（选择：原生对话框/手动输入/最近列表；确认：显式按钮 + `GET /tree` 校验；管理：localStorage 最近列表 + 顶栏 🔄 切换弹层）；未选工作区只显示管理器，其余内容隐藏。主布局骨架（顶栏 + 双栏占位）本切片就位。
 
-## 下一阶段（迭代 7）
+## 必须读
 
-- 候选：命令沙箱（真正隔离，替代模式匹配）/ 多 provider 切换
-- 开工前先写：SPEC 增项 + CHECKLIST 增项 + 本 context-pack，再动代码
+- `SPEC.md`（迭代 6 增补 6）
+- `agent/web.py`（`do_GET` / `INDEX_HTML`）
+- `docs/context-snapshot.md`
 
 ## 不得读 / 不得改
 
 - `.env`（真实凭据）
-- 已放行代码（除非必要最小修改）
+
+## 输出要求
+
+- 产出：`agent/web.py`（`_workspace_tree` + `GET /tree` + `INDEX_HTML` 重写）、`tests/test_web.py`（+1）
+- 验收：`pytest -q` 全绿；冒烟（欢迎页标记 / tree 校验 / 主布局骨架）

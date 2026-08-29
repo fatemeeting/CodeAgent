@@ -2,6 +2,7 @@
 
 import json
 import threading
+import urllib.parse
 import urllib.request
 from http.server import ThreadingHTTPServer
 from unittest import mock
@@ -142,3 +143,28 @@ def test_web_sse_stream():
     assert "data:" in raw
     assert "完成" in raw
     assert "[DONE]" in raw
+
+
+def test_web_tree(tmp_path):
+    server = ThreadingHTTPServer(("127.0.0.1", 0), AgentHandler)
+    server.config = _config()
+    server.workdir = "."
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = server.server_address[1]
+    (tmp_path / "a.py").write_text("x", encoding="utf-8")
+    (tmp_path / "sub").mkdir()
+    try:
+        url = f"http://127.0.0.1:{port}/tree?workdir=" + urllib.parse.quote(str(tmp_path))
+        with urllib.request.urlopen(url) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+        assert result["ok"] is True
+        names = [e["name"] for e in result["tree"]]
+        assert "a.py" in names and "sub" in names
+        bad = f"http://127.0.0.1:{port}/tree?workdir=" + urllib.parse.quote(str(tmp_path / "nope"))
+        with urllib.request.urlopen(bad) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+        assert result["ok"] is False
+    finally:
+        server.shutdown()
+        server.server_close()

@@ -23,95 +23,212 @@ INDEX_HTML = """<!DOCTYPE html>
 <html lang="zh">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>编程智能体 · Coding Agent</title>
 <style>
-  * { box-sizing: border-box; }
-  body { margin: 0; font-family: "Segoe UI", "Microsoft YaHei", sans-serif; background: #0f1115; color: #d8dee9; height: 100vh; display: flex; flex-direction: column; }
-  header { display: flex; align-items: center; gap: .8rem; padding: .6rem 1rem; background: #161a21; border-bottom: 1px solid #232a35; }
-  header h1 { font-size: .95rem; margin: 0; font-weight: 600; white-space: nowrap; }
-  .ws { flex: 1; display: flex; gap: .4rem; }
-  .ws input { flex: 1; width: 100%; padding: .4rem .6rem; background: #0f1115; color: #d8dee9; border: 1px solid #2c3440; border-radius: 4px; font-size: .85rem; }
-  .ws .pick { padding: 0 .8rem; background: #1c2128; color: #d8dee9; border: 1px solid #2c3440; border-radius: 4px; cursor: pointer; font-size: .85rem; white-space: nowrap; }
-  #chat { flex: 1; overflow-y: auto; padding: 1rem 1.2rem; }
-  .tip { color: #8b949e; font-size: .82rem; }
-  .msg { display: flex; margin-bottom: .9rem; }
-  .msg.user { justify-content: flex-end; }
-  .bubble { max-width: 80%; padding: .55rem .85rem; border-radius: 10px; white-space: pre-wrap; word-break: break-word; font-size: .9rem; line-height: 1.55; }
-  .msg.user .bubble { background: #1f4d2e; border: 1px solid #2e7d32; }
-  .msg.agent .bubble { background: #161a21; border: 1px solid #232a35; font-family: Consolas, "Courier New", monospace; }
-  .tool { color: #58a6ff; }
-  .obs { color: #7ee787; }
-  footer { display: flex; gap: .5rem; padding: .7rem 1rem; background: #161a21; border-top: 1px solid #232a35; }
-  footer textarea { flex: 1; resize: none; height: 46px; padding: .5rem .6rem; background: #0f1115; color: #d8dee9; border: 1px solid #2c3440; border-radius: 6px; font-size: .9rem; font-family: inherit; }
-  footer button { padding: 0 1.3rem; background: #2e7d32; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; }
+  :root {
+    --bg: #f7f7f4; --surface: #ffffff; --border: #e5e4df;
+    --text: #26251e; --muted: #8a887e; --accent: #f54e00;
+    --accent-hover: #d94400; --code-bg: #fbfaf8; --ok: #2e7d32; --err: #c62828;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  /* 工作区管理器（欢迎页整页 + 弹层复用同一卡片） */
+  #welcome { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .mgr-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 40px 44px; width: 520px; max-width: 92vw; box-shadow: 0 2px 12px rgba(38,37,30,.06); display: flex; flex-direction: column; gap: 12px; }
+  .mgr-title { font-size: 26px; font-weight: 700; text-align: center; letter-spacing: -.5px; }
+  .mgr-sub { color: var(--muted); text-align: center; margin-bottom: 8px; }
+  .btn { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 8px; padding: 10px 14px; cursor: pointer; font-size: 14px; }
+  .btn:hover { background: var(--code-bg); }
+  .btn-accent { background: var(--accent); color: #fff; border: none; font-weight: 600; }
+  .btn-accent:disabled { background: #e3cfc4; cursor: not-allowed; }
+  .btn-accent:not(:disabled):hover { background: var(--accent-hover); }
+  .mgr-divider { height: 1px; background: var(--border); margin: 4px 0; }
+  .mgr-path { padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: Consolas, monospace; width: 100%; }
+  .mgr-status { font-size: 13px; min-height: 18px; color: var(--muted); }
+  .mgr-status.ok { color: var(--ok); }
+  .mgr-status.err { color: var(--err); }
+  .mgr-recents-title { font-size: 13px; color: var(--muted); }
+  .recent { padding: 8px 10px; border-radius: 8px; cursor: pointer; font-family: Consolas, monospace; font-size: 13px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .recent:hover { background: var(--code-bg); }
+  .recent .path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+  .recent .del { color: var(--muted); font-weight: 700; padding: 0 4px; flex-shrink: 0; }
+  .recent .del:hover { color: var(--err); }
+  .mgr-cancel { border: none; background: none; color: var(--muted); cursor: pointer; font-size: 13px; padding: 6px; }
+  /* 主布局骨架 */
+  #main { display: none; flex: 1; flex-direction: column; }
+  #topbar { display: flex; align-items: center; gap: 12px; padding: 8px 16px; background: var(--surface); border-bottom: 1px solid var(--border); }
+  .brand { font-weight: 700; font-size: 14px; letter-spacing: -.3px; }
+  .mode-switch { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .mode-switch button { padding: 7px 16px; border: none; background: var(--surface); cursor: pointer; font-size: 13px; color: var(--muted); }
+  .mode-switch button.active { background: var(--accent); color: #fff; font-weight: 600; }
+  .ws-chip { margin-left: auto; display: flex; align-items: center; gap: 8px; font-family: Consolas, monospace; font-size: 13px; border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; background: var(--code-bg); }
+  .ws-chip button { border: none; background: none; cursor: pointer; color: var(--accent); font-size: 13px; font-weight: 600; }
+  #content { flex: 1; display: flex; min-height: 0; }
+  .pane { padding: 16px; overflow: auto; }
+  #pane-left { width: 42%; border-right: 1px solid var(--border); }
+  #pane-right { flex: 1; }
+  .placeholder { color: var(--muted); font-size: 14px; display: flex; align-items: center; justify-content: center; height: 100%; border: 1px dashed var(--border); border-radius: 12px; }
+  /* 弹层 */
+  #modal { display: none; position: fixed; inset: 0; background: rgba(38,37,30,.45); align-items: center; justify-content: center; z-index: 10; padding: 24px; }
+  #modal .mgr-card { box-shadow: 0 8px 40px rgba(38,37,30,.2); }
 </style>
 </head>
 <body>
-<header>
-  <h1>🤖 编程智能体</h1>
-  <div class="ws">
-    <input id="ws" placeholder="工作区目录（先指定，如 E:\\demo，留空用默认）">
-    <button class="pick" onclick="pickWs()" title="唤起系统文件夹选择器">📂 选择</button>
+<div id="welcome"></div>
+<div id="main">
+  <div id="topbar">
+    <span class="brand">🤖 编程智能体</span>
+    <div class="mode-switch">
+      <button id="mode-agent" class="active" onclick="setMode('agent')">Agent Window</button>
+      <button id="mode-editor" onclick="setMode('editor')">Editor Window</button>
+    </div>
+    <div class="ws-chip">
+      <span id="ws-name"></span>
+      <button onclick="openManager()" title="切换工作区">🔄 切换</button>
+    </div>
   </div>
-</header>
-<div id="chat"><div class="tip">先指定上方工作区，再发送任务；agent 将在该工作区内完成项目。</div></div>
-<footer>
-  <textarea id="task" placeholder="输入编程任务，Enter 发送（Shift+Enter 换行）"></textarea>
-  <button onclick="send()">发送</button>
-</footer>
+  <div id="content">
+    <div id="pane-left" class="pane"><div class="placeholder">对话区（切片 6.7）</div></div>
+    <div id="pane-right" class="pane"><div class="placeholder">代码文件页（切片 6.7）</div></div>
+  </div>
+</div>
+<div id="modal"><div id="modal-card"></div></div>
 <script>
-const chat = document.getElementById('chat');
-function addMsg(role) {
-  const wrap = document.createElement('div');
-  wrap.className = 'msg ' + role;
-  const bubble = document.createElement('div');
-  bubble.className = 'bubble';
-  bubble._raw = '';
-  wrap.appendChild(bubble);
-  chat.appendChild(wrap);
-  chat.scrollTop = chat.scrollHeight;
-  return bubble;
+const state = {
+  workspace: localStorage.getItem('agent.workspace') || '',
+  recents: JSON.parse(localStorage.getItem('agent.recents') || '[]'),
+};
+let activeManager = null;
+let validateTimer = null;
+
+function mgr(sel) { return activeManager ? activeManager.querySelector(sel) : null; }
+
+function buildManager(container) {
+  const isModal = container.id === 'modal-card';
+  activeManager = container;
+  container.innerHTML = `
+    <div class="mgr-card">
+      <div class="mgr-title">🤖 编程智能体</div>
+      <div class="mgr-sub">选择 AI 助手的工作区目录</div>
+      <button class="btn" onclick="pickWs()">📂 选择文件夹</button>
+      <div class="mgr-divider"></div>
+      <input class="mgr-path" id="mgr-path" placeholder="或手动输入路径，如 E:/demo">
+      <div class="mgr-status" id="mgr-status"></div>
+      <div class="mgr-divider"></div>
+      <div class="mgr-recents-title">最近使用</div>
+      <div id="mgr-recents"></div>
+      <div class="mgr-divider"></div>
+      <button class="btn-accent" id="mgr-confirm" disabled>✓ 确认并进入工作区</button>
+      ${isModal ? '<button class="mgr-cancel" onclick="closeManager()">取消</button>' : ''}
+    </div>`;
+  const input = mgr('#mgr-path');
+  input.addEventListener('input', scheduleValidate);
+  mgr('#mgr-confirm').addEventListener('click', confirmWorkspace);
+  refreshRecents();
+  if (state.workspace) { input.value = state.workspace; scheduleValidate(); }
 }
-function render(bubble) {
-  bubble.innerHTML = '';
-  bubble._raw.split('\\n').forEach(function (line, i) {
-    if (i > 0) bubble.appendChild(document.createElement('br'));
-    let node;
-    if (line.indexOf('[步骤') === 0) { node = document.createElement('span'); node.className = 'tool'; }
-    else if (line.indexOf('        ↳') === 0) { node = document.createElement('span'); node.className = 'obs'; }
-    else { node = document.createElement('span'); }
-    node.textContent = line;
-    bubble.appendChild(node);
-  });
-}
+
 async function pickWs() {
   try {
     const resp = await fetch('/pick-workspace', {method: 'POST'});
     const data = await resp.json();
-    if (data.ok) { document.getElementById('ws').value = data.path; }
-    else if (data.error) { alert(data.error); }
-  } catch (e) { alert('请求失败：' + e); }
+    if (data.ok) { mgr('#mgr-path').value = data.path; scheduleValidate(); }
+    else if (data.error) { setStatus(data.error, false); }
+  } catch (e) { setStatus('请求失败：' + e, false); }
 }
-function send() {
-  const taskEl = document.getElementById('task');
-  const task = taskEl.value.trim();
-  if (!task) return;
-  const ws = document.getElementById('ws').value.trim();
-  taskEl.value = '';
-  const ub = addMsg('user'); ub._raw = task; render(ub);
-  const ab = addMsg('agent');
-  const es = new EventSource('/events?task=' + encodeURIComponent(task) + '&workdir=' + encodeURIComponent(ws));
-  es.onmessage = function (e) {
-    if (e.data === '[DONE]') { es.close(); ab._raw += '\\n✓ 完成'; render(ab); return; }
-    ab._raw += JSON.parse(e.data).text;
-    render(ab);
-    chat.scrollTop = chat.scrollHeight;
-  };
-  es.onerror = function () { es.close(); };
+
+function setStatus(text, ok) {
+  const s = mgr('#mgr-status');
+  if (!s) return;
+  s.textContent = text;
+  s.className = 'mgr-status' + (ok ? ' ok' : ' err');
 }
-document.getElementById('task').addEventListener('keydown', function (e) {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
-});
+
+function scheduleValidate() { clearTimeout(validateTimer); validateTimer = setTimeout(validate, 400); }
+
+async function validate() {
+  const path = mgr('#mgr-path').value.trim();
+  const confirm = mgr('#mgr-confirm');
+  if (!path) { setStatus('', false); confirm.disabled = true; return; }
+  setStatus('校验中…', false);
+  try {
+    const resp = await fetch('/tree?workdir=' + encodeURIComponent(path));
+    const data = await resp.json();
+    if (data.ok) { setStatus('✓ 目录存在，可进入', true); confirm.disabled = false; }
+    else { setStatus('✗ ' + (data.error || '目录不存在'), false); confirm.disabled = true; }
+  } catch (e) { setStatus('✗ 校验失败：' + e, false); confirm.disabled = true; }
+}
+
+function confirmWorkspace() {
+  const path = mgr('#mgr-path').value.trim();
+  state.workspace = path;
+  state.recents = [path, ...state.recents.filter(r => r !== path)].slice(0, 8);
+  localStorage.setItem('agent.workspace', path);
+  localStorage.setItem('agent.recents', JSON.stringify(state.recents));
+  enterMain();
+}
+
+function refreshRecents() {
+  const box = mgr('#mgr-recents');
+  if (!box) return;
+  if (!state.recents.length) { box.innerHTML = '<div class="mgr-status">暂无记录</div>'; return; }
+  box.innerHTML = '';
+  state.recents.forEach(path => {
+    const row = document.createElement('div');
+    row.className = 'recent';
+    const span = document.createElement('span');
+    span.className = 'path';
+    span.textContent = path;
+    span.onclick = () => { mgr('#mgr-path').value = path; scheduleValidate(); };
+    const del = document.createElement('span');
+    del.className = 'del';
+    del.textContent = '✕';
+    del.onclick = () => {
+      state.recents = state.recents.filter(r => r !== path);
+      localStorage.setItem('agent.recents', JSON.stringify(state.recents));
+      refreshRecents();
+    };
+    row.appendChild(span); row.appendChild(del);
+    box.appendChild(row);
+  });
+}
+
+function enterMain() {
+  document.getElementById('welcome').style.display = 'none';
+  document.getElementById('main').style.display = 'flex';
+  document.getElementById('ws-name').textContent = state.workspace;
+  closeManager();
+}
+
+function openManager() {
+  document.getElementById('modal').style.display = 'flex';
+  buildManager(document.getElementById('modal-card'));
+}
+
+function closeManager() {
+  document.getElementById('modal').style.display = 'none';
+  activeManager = document.getElementById('welcome');
+}
+
+function setMode(mode) {
+  document.getElementById('mode-agent').classList.toggle('active', mode === 'agent');
+  document.getElementById('mode-editor').classList.toggle('active', mode === 'editor');
+  document.getElementById('pane-left').innerHTML = mode === 'agent'
+    ? '<div class="placeholder">对话区（切片 6.7）</div>'
+    : '<div class="placeholder">文件树（切片 6.8）</div>';
+}
+
+(async function boot() {
+  buildManager(document.getElementById('welcome'));
+  if (state.workspace) {
+    try {
+      const resp = await fetch('/tree?workdir=' + encodeURIComponent(state.workspace));
+      const data = await resp.json();
+      if (data.ok) { enterMain(); }
+    } catch (e) { /* 校验失败留在欢迎页 */ }
+  }
+})();
 </script>
 </body>
 </html>
@@ -147,6 +264,22 @@ def pick_workspace() -> str | None:
         return None
 
 
+_SKIP_DIRS = {".git", ".venv", "venv", "__pycache__", "node_modules", ".idea", ".vscode", "dist", "build"}
+
+
+def _workspace_tree(workdir: str) -> list[dict]:
+    """工作区顶层条目（目录 / 文件），用于工作区校验与文件树。"""
+    root = Path(workdir)
+    if not root.is_dir():
+        raise ValueError(f"工作区不存在：{workdir}")
+    entries = []
+    for p in sorted(root.iterdir(), key=lambda x: (x.is_file(), x.name.lower())):
+        if p.name.startswith(".") or p.name in _SKIP_DIRS:
+            continue
+        entries.append({"name": p.name, "type": "dir" if p.is_dir() else "file"})
+    return entries
+
+
 class _SseWriter:
     """把 stdout 写入转发到队列，供 SSE 流式发送。"""
 
@@ -173,8 +306,26 @@ class AgentHandler(BaseHTTPRequestHandler):
             self.wfile.write(data)
         elif self.path.startswith("/events"):
             self._handle_events()
+        elif self.path.startswith("/tree"):
+            self._handle_tree()
         else:
             self.send_error(404)
+
+    def _handle_tree(self) -> None:
+        """工作区校验 + 顶层文件树。"""
+        parsed = urllib.parse.urlparse(self.path)
+        workdir = (urllib.parse.parse_qs(parsed.query).get("workdir") or [None])[0] or self.server.workdir
+        try:
+            tree = _workspace_tree(workdir)
+            result = {"ok": True, "workdir": workdir, "tree": tree}
+        except Exception as exc:  # noqa: BLE001
+            result = {"ok": False, "error": str(exc)}
+        data = json.dumps(result, ensure_ascii=False).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
 
     def _handle_events(self) -> None:
         """SSE 流式：后台线程运行 agent，逐条推送输出，[DONE] 结束。"""
