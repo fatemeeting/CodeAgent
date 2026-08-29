@@ -64,9 +64,11 @@ INDEX_HTML = """<!DOCTYPE html>
   .ws-chip button { border: none; background: none; cursor: pointer; color: var(--accent); font-size: 13px; font-weight: 600; }
   #content { flex: 1; display: flex; min-height: 0; }
   .pane { display: flex; flex-direction: column; overflow: hidden; }
-  #pane-left { width: 18%; border-right: 1px solid var(--border); }
-  #pane-center { flex: 1; }
-  #pane-right { width: 30%; border-left: 1px solid var(--border); }
+  #pane-left { width: 240px; }
+  #pane-center { flex: 1; min-width: 0; }
+  #pane-right { width: 380px; }
+  .splitter { width: 4px; cursor: col-resize; background: var(--border); flex-shrink: 0; }
+  .splitter:hover { background: var(--accent); }
   #terminal-panel { display: flex; flex-direction: column; height: 180px; border-top: 1px solid var(--border); background: var(--surface); }
   #editor-host { flex: 1; min-height: 0; }
   .placeholder { color: var(--muted); font-size: 14px; display: flex; align-items: center; justify-content: center; height: 100%; border: 1px dashed var(--border); border-radius: 12px; margin: 16px; }
@@ -113,11 +115,20 @@ INDEX_HTML = """<!DOCTYPE html>
   #modal { display: none; position: fixed; inset: 0; background: rgba(38,37,30,.45); align-items: center; justify-content: center; z-index: 10; padding: 24px; }
   #modal .mgr-card { box-shadow: 0 8px 40px rgba(38,37,30,.2); }
 </style>
-<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0/min/vs/loader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0/min/vs/loader.js" onerror="fallbackMonaco()"></script>
 <script>
-  if (window.require) {
-    require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0/min/vs' } });
+  function configMonaco(base) {
+    require.config({ paths: { vs: base } });
     require(['vs/editor/editor.main'], function () { window.monacoReady = true; });
+  }
+  function fallbackMonaco() {
+    const s = document.createElement('script');
+    s.src = 'https://unpkg.com/monaco-editor@0.52.0/min/vs/loader.js';
+    s.onload = function () { configMonaco('https://unpkg.com/monaco-editor@0.52.0/min/vs'); };
+    document.head.appendChild(s);
+  }
+  if (window.require) {
+    configMonaco('https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0/min/vs');
   }
 </script>
 </head>
@@ -133,7 +144,9 @@ INDEX_HTML = """<!DOCTYPE html>
   </div>
   <div id="content">
     <div id="pane-left" class="pane"></div>
+    <div class="splitter" id="split1"></div>
     <div id="pane-center" class="pane"></div>
+    <div class="splitter" id="split2"></div>
     <div id="pane-right" class="pane"></div>
   </div>
   <div id="terminal-panel"></div>
@@ -259,6 +272,49 @@ function closeManager() {
 
 let chatMessages = [];
 let editor = null;
+let currentFile = null;
+
+function initSplitters() {
+  const left = document.getElementById('pane-left');
+  const right = document.getElementById('pane-right');
+  const center = document.getElementById('pane-center');
+  let leftW = Math.min(800, Math.max(120, parseInt(localStorage.getItem('agent.paneLeft') || '240', 10)));
+  let rightW = Math.min(800, Math.max(120, parseInt(localStorage.getItem('agent.paneRight') || '380', 10)));
+  const apply = () => {
+    left.style.width = leftW + 'px';
+    left.style.flex = 'none';
+    right.style.width = rightW + 'px';
+    right.style.flex = 'none';
+    center.style.flex = '1';
+  };
+  apply();
+  const drag = (splitter, isLeft) => {
+    splitter.addEventListener('mousedown', function (e) {
+      e.preventDefault();
+      const startX = e.clientX;
+      const startW = isLeft ? leftW : rightW;
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      const move = ev => {
+        const w = isLeft ? startW + (ev.clientX - startX) : startW - (ev.clientX - startX);
+        if (w < 120 || w > 800) return;
+        if (isLeft) { leftW = w; localStorage.setItem('agent.paneLeft', String(w)); }
+        else { rightW = w; localStorage.setItem('agent.paneRight', String(w)); }
+        apply();
+      };
+      const up = () => {
+        document.removeEventListener('mousemove', move);
+        document.removeEventListener('mouseup', up);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+      document.addEventListener('mousemove', move);
+      document.addEventListener('mouseup', up);
+    });
+  };
+  drag(document.getElementById('split1'), true);
+  drag(document.getElementById('split2'), false);
+}
 
 function buildLayout() {
   buildFileTree();
@@ -431,9 +487,11 @@ function buildEditor() {
     <div id="editor-host"><div class="placeholder">点击左侧文件树查看代码</div></div>`;
   ensureMonaco(function () {
     if (window.monaco) {
-      editor = monaco.editor.create(document.getElementById('editor-host'), {
-        value: '',
-        language: 'plaintext',
+      const host = document.getElementById('editor-host');
+      host.className = '';
+      editor = monaco.editor.create(host, {
+        value: currentFile ? currentFile.content : '',
+        language: currentFile ? langOf(currentFile.name) : 'plaintext',
         theme: 'vs',
         automaticLayout: true,
         fontSize: 13,
@@ -442,7 +500,8 @@ function buildEditor() {
     } else {
       const host = document.getElementById('editor-host');
       host.className = 'file-view';
-      host.innerHTML = '';
+      if (currentFile) { renderFile(currentFile.content); }
+      else { host.innerHTML = ''; }
     }
   });
 }
@@ -482,6 +541,7 @@ async function loadFile(name) {
     const data = await resp.json();
     const tab = document.getElementById('file-tab');
     if (data.ok) {
+      currentFile = { name: data.name, content: data.content };
       if (tab) { tab.textContent = data.name; tab.style.display = ''; }
       if (editor) {
         editor.setValue(data.content);
@@ -503,6 +563,7 @@ async function loadFile(name) {
 function renderFile(content) {
   const view = document.getElementById('editor-host');
   if (!view) return;
+  view.className = 'file-view';
   view.innerHTML = '';
   content.split('\\n').forEach(function (line, i) {
     const div = document.createElement('div');
@@ -620,6 +681,7 @@ function appendTerm(text, cls) {
 }
 
 (async function boot() {
+  initSplitters();
   buildManager(document.getElementById('welcome'));
   if (state.workspace) {
     try {

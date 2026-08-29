@@ -377,4 +377,15 @@
 - **检查证据**：
   - `pytest -q` → **65 passed**
   - 冒烟（重启服务后）：`Agent Window`/`file-select`/`mode-switch` 均 0 次；tab 隐藏样式与 `buildLayout` 就位
+- **人工放行决定**：通过
+
+## 迭代 6 v2 交互修复：栏宽拖拽 + 文件树点击显示
+
+- **时间**：2026-08-28
+- **问题**：① 三栏宽度固定不可调；② 点击文件树文件不在中央代码栏显示——根因是 Monaco CDN 异步加载竞态（点击时 `editor` 未就绪走回退渲染，随后 Monaco 空编辑器覆盖内容）+ 可能的 CDN 加载失败（jsdelivr 被墙时无兜底）
+- **修复**：
+  - `agent/web.py`：① 三栏间加 `.splitter` 分隔条，`initSplitters` 拖拽调整宽度（120–800px），存 `localStorage`（`agent.paneLeft/Right`）重启恢复；② `currentFile` 缓存最近文件——Monaco 就绪时用缓存内容初始化编辑器（消灭竞态）；③ 回退渲染强制 `file-view` 类；④ Monaco loader 增加 `onerror` 兜底（jsdelivr → unpkg），双 CDN 都失败仍可用行号视图
+- **检查证据**：
+  - `pytest -q` → **65 passed**
+  - 冒烟：页面含分隔条/拖拽/currentFile/兜底标记；模拟点击流——`/tree?deep=1` 返回 `sub\x.py`（Windows 反斜杠）→ `/file` 用该路径返回 `print(3)` ✓
 - **人工放行决定**：（待用户确认：通过 / 重试 / 降级 / 停止）

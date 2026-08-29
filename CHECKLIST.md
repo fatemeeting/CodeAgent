@@ -128,3 +128,8 @@
 
 - [x] R1 删除 Agent Window 与模式切换（仅 Editor Window）
 - [x] R2 文件头删除下拉框；文件名 tab 未点文件时隐藏
+
+## S. 迭代 6 v2 交互修复（栏宽拖拽 + 文件树点击）
+
+- [x] S1 三栏宽度可拖拽调整（分隔条 + localStorage 持久化）
+- [x] S2 点击文件树文件在中央代码栏显示（Monaco 竞态修复 + CDN 兜底）
