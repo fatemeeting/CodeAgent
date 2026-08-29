@@ -197,3 +197,35 @@ def test_web_file(tmp_path):
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_web_exec(tmp_path):
+    server = ThreadingHTTPServer(("127.0.0.1", 0), AgentHandler)
+    server.config = _config()
+    server.workdir = str(tmp_path)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = server.server_address[1]
+
+    def post(payload):
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{port}/exec",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+
+    try:
+        r = post({"workdir": str(tmp_path), "command": "echo hi"})
+        assert r["ok"] is True
+        assert "hi" in r["output"]
+        assert r["dangerous"] is False
+        r = post({"workdir": str(tmp_path), "command": "rm"})
+        assert r["ok"] is True
+        assert r["dangerous"] is True
+        r = post({"workdir": str(tmp_path / "nope"), "command": "echo x"})
+        assert r["ok"] is False
+    finally:
+        server.shutdown()
+        server.server_close()

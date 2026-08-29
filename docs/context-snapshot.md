@@ -25,6 +25,7 @@
 - 迭代 6 切片 6.5 通过：原生文件夹选择器（tkinter `askdirectory` + `/pick-workspace`）；`pytest` 61 passed
 - 迭代 6 v2 切片 6.6 通过：工作区管理器（选择/确认/管理 + 最近列表 + 校验）+ Cursor 视觉系统 + `/tree`；`pytest` 62 passed
 - 迭代 6 v2 切片 6.7 通过：Agent Window（对话气泡 + SSE 流式 + 右侧文件页/右上文件名/行号/自动展示最新文件）+ `/file`（含越界防护）；`pytest` 63 passed
+- 迭代 6 v2 切片 6.8 通过：Editor Window（文件树 | Monaco CDN | 聊天 + 底部终端 `/exec` + 模式切换状态重放）；`pytest` 64 passed
 - CI 修复与工作流：跨平台测试修复（`del`→`os.remove`）+ 堵 `os.remove` 绕过；推送工作流确立（GIT_SSH + Actions 轮询）
 
 ## 未完成 / 未决

@@ -1,22 +1,20 @@
 # context-pack.md — 当前阶段上下文包
 
-> 当前阶段：**迭代 6 v2 · 切片 6.7（Agent Window：对话 + 文件页）**
+> 当前阶段：**迭代 6 v2 · 完成（Cursor 风格双模式 IDE）**
 
-## 当前阶段目标
+## 本阶段已完成
 
-Agent Window 左栏：对话历史（气泡、SSE 流式、工具调用着色）+ 底部输入框（Enter 发送）；右栏：文件页（**右上方文件名 tab** + 文件切换下拉 + 行号代码视图）；任务完成后自动展示最新修改文件。后端新增 `GET /file`（含路径越界防护）。B 策略的 Monaco 留待 6.8 编辑器模式。
+- 切片 6.6 工作区管理器 + 视觉系统：整页管理器（选择/确认/管理 + 校验）+ 暖白/橙视觉
+- 切片 6.7 Agent Window：对话（气泡 + SSE 流式）+ 文件页（右上文件名 + 行号 + 自动展示最新文件）
+- 切片 6.8 Editor Window：文件树 | Monaco（CDN，离线回退）| 聊天 + 底部终端（/exec）
 
-## 必须读
+## 下一阶段（迭代 6.9 可选 / 迭代 7）
 
-- `SPEC.md`（迭代 6 增补 6）
-- `agent/web.py`（`INDEX_HTML` / `do_GET` / `_workspace_tree`）
-- `docs/context-snapshot.md`
+- 6.9（可选）：深/浅主题切换、布局持久化
+- 迭代 7：命令沙箱（真正隔离）/ 多 provider
+- 开工前先写：SPEC 增项 + CHECKLIST 增项 + 本 context-pack，再动代码
 
 ## 不得读 / 不得改
 
 - `.env`（真实凭据）
-
-## 输出要求
-
-- 产出：`agent/web.py`（`GET /file` + `_handle_file` + 前端对话/文件页）、`tests/test_web.py`（+1）
-- 验收：`pytest -q` 全绿；冒烟（file 端点 + 页面标记）
+- 已放行代码（除非必要最小修改）

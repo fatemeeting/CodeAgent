@@ -338,4 +338,18 @@
 - **检查证据**：
   - `pytest -q` → **63 passed**
   - 冒烟：页面含对话区/文件页全部标记；`/file` 返回 README.txt 内容；端到端 SSE 任务生成 hello67.py → `/tree` 含 mtime → `/file` 返回 `print("hi67")`
+- **人工放行决定**：通过
+
+## 迭代 6 v2 · 切片 6.8：Editor Window + Monaco + 终端
+
+- **时间**：2026-08-28
+- **给 Agent 的任务**：实现 Editor Window 三栏 + 底部终端，模式切换状态不丢
+- **Agent 修改了什么**：
+  - `agent/web.py`：`POST /exec`（复用 `execute_command` 工具 + `is_dangerous` 标记；终端是用户直接输入，无需 HITL 确认）；`/tree?deep=1` 递归文件树（`_workspace_tree(deep=)`）；前端——三栏布局（`body.agent`/`body.editor` 模式类）、文件树（`buildFileTree`/`renderTreeNode` 可折叠目录）、Monaco 编辑器（CDN `cdn.jsdelivr.net`，`ensureMonaco` 离线回退行号视图 + `langOf` 语言映射）、终端（`buildTerminal`/`runTerm`/`appendTerm`，危险命令 ⚠️ 提示，可折叠）、对话状态存 `chatMessages` 数组跨模式重放
+  - `tests/test_web.py`（+1：/exec 正常/危险标记/无效工作区）
+  - 更新 `CHECKLIST.md`（P 节）、`docs/context-pack.md`、`docs/gate-checklist.md`
+- **检查证据**：
+  - `pytest -q` → **64 passed**
+  - 冒烟：页面含 Monaco CDN/终端/文件树/重放/模式布局全部标记；`/exec` echo 正常 + dangerous 标记正确；`/tree?deep=1` 递归（sub/x.py）；`/file sub/x.py` 返回内容
+- **设计决策**：终端命令由用户直接输入（用户即确认者），故只标记危险不阻断；Monaco 走 CDN 且离线时优雅回退行号视图（B 策略）
 - **人工放行决定**：（待用户确认：通过 / 重试 / 降级 / 停止）

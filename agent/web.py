@@ -18,6 +18,7 @@ from pathlib import Path
 from .config import Config
 from .llm import LLMClient
 from .loop import run
+from .tools.shell_tools import execute_command, is_dangerous
 
 INDEX_HTML = """<!DOCTYPE html>
 <html lang="zh">
@@ -66,8 +67,15 @@ INDEX_HTML = """<!DOCTYPE html>
   .ws-chip button { border: none; background: none; cursor: pointer; color: var(--accent); font-size: 13px; font-weight: 600; }
   #content { flex: 1; display: flex; min-height: 0; }
   .pane { display: flex; flex-direction: column; overflow: hidden; }
-  #pane-left { width: 42%; border-right: 1px solid var(--border); }
-  #pane-right { flex: 1; }
+  body.agent #pane-left { width: 42%; border-right: 1px solid var(--border); }
+  body.agent #pane-right { flex: 1; }
+  #pane-center { flex: 1; display: none; }
+  body.editor #pane-left { width: 18%; border-right: 1px solid var(--border); }
+  body.editor #pane-center { display: flex; }
+  body.editor #pane-right { width: 30%; border-left: 1px solid var(--border); }
+  #terminal-panel { display: none; }
+  body.editor #terminal-panel { display: flex; flex-direction: column; height: 180px; border-top: 1px solid var(--border); background: var(--surface); }
+  #editor-host { flex: 1; min-height: 0; }
   .placeholder { color: var(--muted); font-size: 14px; display: flex; align-items: center; justify-content: center; height: 100%; border: 1px dashed var(--border); border-radius: 12px; margin: 16px; }
   /* 对话区（Agent Window 左栏） */
   #chat-history { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
@@ -84,12 +92,37 @@ INDEX_HTML = """<!DOCTYPE html>
   #file-header { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 12px 16px 8px; }
   #file-tab { font-family: Consolas, monospace; font-size: 13px; font-weight: 600; background: var(--surface); border: 1px solid var(--border); border-radius: 6px 6px 0 0; padding: 6px 12px; }
   #file-select { font-size: 12px; border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; background: var(--surface); color: var(--text); }
-  #file-view { flex: 1; margin: 0 16px 16px; background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px; overflow: auto; font-family: Consolas, monospace; font-size: 13px; line-height: 1.5; }
-  #file-view .ln { display: inline-block; width: 40px; color: var(--muted); text-align: right; margin-right: 12px; user-select: none; }
+  #file-view, .file-view { flex: 1; margin: 0 16px 16px; background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px; overflow: auto; font-family: Consolas, monospace; font-size: 13px; line-height: 1.5; }
+  #file-view .ln, .file-view .ln { display: inline-block; width: 40px; color: var(--muted); text-align: right; margin-right: 12px; user-select: none; }
+  /* 文件树（Editor 左栏） */
+  .tree-title { font-size: 12px; font-weight: 700; color: var(--muted); padding: 10px 16px 6px; letter-spacing: .3px; }
+  #tree-root { flex: 1; overflow: auto; padding: 4px 8px 16px; }
+  .tree-node { font-size: 13px; }
+  .tree-label { display: block; padding: 3px 6px; border-radius: 6px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tree-label:hover { background: var(--code-bg); }
+  .tree-label.file { font-family: Consolas, monospace; }
+  .tree-kids { padding-left: 14px; }
+  /* 终端（Editor 底部） */
+  #term-header { display: flex; justify-content: space-between; align-items: center; padding: 6px 16px; font-size: 12px; font-weight: 700; color: var(--muted); border-bottom: 1px solid var(--border); }
+  #term-toggle { cursor: pointer; color: var(--accent); font-weight: 600; }
+  #term-body { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  #term-output { flex: 1; overflow: auto; padding: 8px 16px; font-family: Consolas, monospace; font-size: 12.5px; background: #1e1b16; color: #e8e4da; }
+  #term-output .term-warn { color: #ffb020; }
+  #term-output .term-err { color: #ff7a6e; }
+  #term-inputbar { display: flex; gap: 8px; padding: 6px 16px; border-top: 1px solid var(--border); align-items: center; }
+  #term-prompt { color: var(--accent); font-family: Consolas, monospace; font-weight: 700; }
+  #term-input { flex: 1; border: none; background: none; outline: none; font-family: Consolas, monospace; font-size: 13px; color: var(--text); }
   /* 弹层 */
   #modal { display: none; position: fixed; inset: 0; background: rgba(38,37,30,.45); align-items: center; justify-content: center; z-index: 10; padding: 24px; }
   #modal .mgr-card { box-shadow: 0 8px 40px rgba(38,37,30,.2); }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0/min/vs/loader.js"></script>
+<script>
+  if (window.require) {
+    require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0/min/vs' } });
+    require(['vs/editor/editor.main'], function () { window.monacoReady = true; });
+  }
+</script>
 </head>
 <body>
 <div id="welcome"></div>
@@ -107,8 +140,10 @@ INDEX_HTML = """<!DOCTYPE html>
   </div>
   <div id="content">
     <div id="pane-left" class="pane"></div>
+    <div id="pane-center" class="pane"></div>
     <div id="pane-right" class="pane"></div>
   </div>
+  <div id="terminal-panel"></div>
 </div>
 <div id="modal"><div id="modal-card"></div></div>
 <script>
@@ -229,37 +264,49 @@ function closeManager() {
   activeManager = document.getElementById('welcome');
 }
 
+let chatMessages = [];
+let editor = null;
+
 function setMode(mode) {
+  document.body.className = mode;
   document.getElementById('mode-agent').classList.toggle('active', mode === 'agent');
   document.getElementById('mode-editor').classList.toggle('active', mode === 'editor');
-  if (mode === 'agent') { buildAgentLeft(); buildAgentRight(); }
-  else {
-    document.getElementById('pane-left').innerHTML = '<div class="placeholder">文件树（切片 6.8）</div>';
-    document.getElementById('pane-right').innerHTML = '<div class="placeholder">代码编辑器（切片 6.8 · Monaco）</div>';
+  if (mode === 'agent') {
+    buildChat('pane-left');
+    buildAgentRight();
+  } else {
+    buildFileTree();
+    buildEditor();
+    buildChat('pane-right');
+    buildTerminal();
   }
 }
 
-/* ---------- Agent Window 左栏：对话 ---------- */
-function buildAgentLeft() {
-  document.getElementById('pane-left').innerHTML = `
+/* ---------- 对话（Agent 左栏 / Editor 右栏复用；状态存 chatMessages 重放） ---------- */
+function buildChat(containerId) {
+  document.getElementById(containerId).innerHTML = `
     <div id="chat-history"></div>
     <div id="chat-inputbar">
       <textarea id="chat-input" placeholder="输入编程任务，Enter 发送（Shift+Enter 换行）"></textarea>
       <button class="btn-accent" onclick="sendTask()">发送</button>
     </div>`;
+  chatMessages.forEach(m => appendMsg(m.role, m.raw));
+  const h = document.getElementById('chat-history');
+  h.scrollTop = h.scrollHeight;
   document.getElementById('chat-input').addEventListener('keydown', function (e) {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendTask(); }
   });
 }
 
-function addMsg(role) {
+function appendMsg(role, raw) {
   const wrap = document.createElement('div');
   wrap.className = 'msg ' + role;
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
-  bubble._raw = '';
+  bubble._raw = raw;
   wrap.appendChild(bubble);
   document.getElementById('chat-history').appendChild(wrap);
+  renderBubble(bubble);
   const h = document.getElementById('chat-history');
   h.scrollTop = h.scrollHeight;
   return bubble;
@@ -283,20 +330,31 @@ function sendTask() {
   const task = input.value.trim();
   if (!task) return;
   input.value = '';
-  const ub = addMsg('user'); ub._raw = task; renderBubble(ub);
-  const ab = addMsg('agent');
+  chatMessages.push({role: 'user', raw: task});
+  appendMsg('user', task);
+  chatMessages.push({role: 'agent', raw: ''});
+  const bubble = appendMsg('agent', '');
+  const idx = chatMessages.length - 1;
   const es = new EventSource('/events?task=' + encodeURIComponent(task) + '&workdir=' + encodeURIComponent(state.workspace));
   es.onmessage = function (e) {
-    if (e.data === '[DONE]') { es.close(); ab._raw += '\\n✓ 完成'; renderBubble(ab); refreshFiles(); return; }
-    ab._raw += JSON.parse(e.data).text;
-    renderBubble(ab);
+    if (e.data === '[DONE]') {
+      es.close();
+      chatMessages[idx].raw += '\\n✓ 完成';
+      bubble._raw = chatMessages[idx].raw;
+      renderBubble(bubble);
+      refreshFiles();
+      return;
+    }
+    chatMessages[idx].raw += JSON.parse(e.data).text;
+    bubble._raw = chatMessages[idx].raw;
+    renderBubble(bubble);
     const h = document.getElementById('chat-history');
     h.scrollTop = h.scrollHeight;
   };
   es.onerror = function () { es.close(); };
 }
 
-/* ---------- Agent Window 右栏：文件页 ---------- */
+/* ---------- 文件页（Agent 右栏 / Editor 中栏复用） ---------- */
 function buildAgentRight() {
   document.getElementById('pane-right').innerHTML = `
     <div id="file-header">
@@ -306,6 +364,46 @@ function buildAgentRight() {
     <div id="file-view"><div class="placeholder">任务完成后这里展示代码文件</div></div>`;
 }
 
+function buildEditor() {
+  document.getElementById('pane-center').innerHTML = `
+    <div id="file-header">
+      <select id="file-select" onchange="loadFile(this.value)"></select>
+      <span id="file-tab">—</span>
+    </div>
+    <div id="editor-host"></div>`;
+  ensureMonaco(function () {
+    if (window.monaco) {
+      editor = monaco.editor.create(document.getElementById('editor-host'), {
+        value: '',
+        language: 'plaintext',
+        theme: 'vs',
+        automaticLayout: true,
+        fontSize: 13,
+        minimap: { enabled: false },
+      });
+    } else {
+      document.getElementById('editor-host').className = 'file-view';
+    }
+  });
+}
+
+function ensureMonaco(cb) {
+  if (window.monaco) { cb(); return; }
+  if (window.require) {
+    require(['vs/editor/editor.main'], function () { cb(); });
+  } else {
+    cb();
+  }
+}
+
+function langOf(name) {
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  const map = {py: 'python', js: 'javascript', ts: 'typescript', json: 'json', md: 'markdown',
+    html: 'html', css: 'css', java: 'java', c: 'c', cpp: 'cpp', go: 'go', rs: 'rust',
+    sh: 'shell', yml: 'yaml', yaml: 'yaml', toml: 'ini'};
+  return map[ext] || 'plaintext';
+}
+
 async function refreshFiles() {
   try {
     const resp = await fetch('/tree?workdir=' + encodeURIComponent(state.workspace));
@@ -313,13 +411,16 @@ async function refreshFiles() {
     if (!data.ok) return;
     const files = data.tree.filter(e => e.type === 'file');
     const sel = document.getElementById('file-select');
-    sel.innerHTML = '';
-    files.forEach(f => {
-      const opt = document.createElement('option');
-      opt.value = f.name;
-      opt.textContent = f.name;
-      sel.appendChild(opt);
-    });
+    if (sel) {
+      sel.innerHTML = '';
+      files.forEach(f => {
+        const opt = document.createElement('option');
+        opt.value = f.name;
+        opt.textContent = f.name;
+        sel.appendChild(opt);
+      });
+    }
+    if (document.getElementById('tree-root')) loadTree();
     files.sort((a, b) => (b.mtime || 0) - (a.mtime || 0));
     if (files.length) loadFile(files[0].name);
   } catch (e) { /* 忽略 */ }
@@ -330,18 +431,27 @@ async function loadFile(name) {
     const resp = await fetch('/file?workdir=' + encodeURIComponent(state.workspace) + '&path=' + encodeURIComponent(name));
     const data = await resp.json();
     if (data.ok) {
-      document.getElementById('file-tab').textContent = data.name;
-      renderFile(data.content);
+      const tab = document.getElementById('file-tab');
+      if (tab) tab.textContent = data.name;
+      if (editor) {
+        editor.setValue(data.content);
+        monaco.editor.setModelLanguage(editor.getModel(), langOf(data.name));
+      } else {
+        renderFile(data.content);
+      }
     } else {
-      document.getElementById('file-view').innerHTML = '<div class="placeholder">' + (data.error || '加载失败') + '</div>';
+      const view = document.getElementById('file-view') || document.getElementById('editor-host');
+      if (view) view.innerHTML = '<div class="placeholder">' + (data.error || '加载失败') + '</div>';
     }
   } catch (e) {
-    document.getElementById('file-view').innerHTML = '<div class="placeholder">请求失败</div>';
+    const view = document.getElementById('file-view') || document.getElementById('editor-host');
+    if (view) view.innerHTML = '<div class="placeholder">请求失败</div>';
   }
 }
 
 function renderFile(content) {
-  const view = document.getElementById('file-view');
+  const view = document.getElementById('file-view') || document.getElementById('editor-host');
+  if (!view) return;
   view.innerHTML = '';
   content.split('\\n').forEach(function (line, i) {
     const div = document.createElement('div');
@@ -352,6 +462,110 @@ function renderFile(content) {
     div.appendChild(document.createTextNode(line === '' ? ' ' : line));
     view.appendChild(div);
   });
+}
+
+/* ---------- 文件树（Editor 左栏） ---------- */
+function buildFileTree() {
+  document.getElementById('pane-left').innerHTML = `
+    <div class="tree-title">资源管理器</div>
+    <div id="tree-root"></div>`;
+  loadTree();
+}
+
+async function loadTree() {
+  try {
+    const resp = await fetch('/tree?workdir=' + encodeURIComponent(state.workspace) + '&deep=1');
+    const data = await resp.json();
+    const root = document.getElementById('tree-root');
+    if (!root) return;
+    root.innerHTML = '';
+    if (!data.ok) {
+      root.innerHTML = '<div class="mgr-status err">' + (data.error || '加载失败') + '</div>';
+      return;
+    }
+    data.tree.forEach(n => root.appendChild(renderTreeNode(n)));
+  } catch (e) { /* 忽略 */ }
+}
+
+function renderTreeNode(n) {
+  const div = document.createElement('div');
+  div.className = 'tree-node';
+  const label = document.createElement('span');
+  label.className = 'tree-label ' + (n.type === 'dir' ? 'dir' : 'file');
+  label.textContent = (n.type === 'dir' ? '📁 ' : '📄 ') + n.name;
+  div.appendChild(label);
+  if (n.type === 'file') {
+    label.onclick = () => loadFile(n.path);
+  } else {
+    label.onclick = () => {
+      const kids = div.querySelector('.tree-kids');
+      if (kids) kids.style.display = kids.style.display === 'none' ? '' : 'none';
+    };
+    const kids = document.createElement('div');
+    kids.className = 'tree-kids';
+    (n.children || []).forEach(c => kids.appendChild(renderTreeNode(c)));
+    div.appendChild(kids);
+  }
+  return div;
+}
+
+/* ---------- 终端（Editor 底部） ---------- */
+function buildTerminal() {
+  document.getElementById('terminal-panel').innerHTML = `
+    <div id="term-header">
+      <span>终端</span>
+      <span id="term-toggle" onclick="toggleTerminal()">折叠</span>
+    </div>
+    <div id="term-body">
+      <div id="term-output"></div>
+      <div id="term-inputbar">
+        <span id="term-prompt">&gt;</span>
+        <input id="term-input" placeholder="执行命令，如 python main.py">
+      </div>
+    </div>`;
+  document.getElementById('term-input').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); runTerm(); }
+  });
+}
+
+function toggleTerminal() {
+  const body = document.getElementById('term-body');
+  const toggle = document.getElementById('term-toggle');
+  if (body.style.display === 'none') { body.style.display = ''; toggle.textContent = '折叠'; }
+  else { body.style.display = 'none'; toggle.textContent = '展开'; }
+}
+
+async function runTerm() {
+  const input = document.getElementById('term-input');
+  const cmd = input.value.trim();
+  if (!cmd) return;
+  input.value = '';
+  appendTerm('$ ' + cmd);
+  try {
+    const resp = await fetch('/exec', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({workdir: state.workspace, command: cmd}),
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      if (data.dangerous) appendTerm('⚠️ 检测到危险命令', 'warn');
+      appendTerm(data.output);
+    } else {
+      appendTerm('错误：' + data.error, 'err');
+    }
+  } catch (e) {
+    appendTerm('请求失败：' + e, 'err');
+  }
+}
+
+function appendTerm(text, cls) {
+  const out = document.getElementById('term-output');
+  const div = document.createElement('div');
+  if (cls) div.className = 'term-' + cls;
+  div.textContent = text;
+  out.appendChild(div);
+  out.scrollTop = out.scrollHeight;
 }
 
 (async function boot() {
@@ -402,20 +616,45 @@ def pick_workspace() -> str | None:
 _SKIP_DIRS = {".git", ".venv", "venv", "__pycache__", "node_modules", ".idea", ".vscode", "dist", "build"}
 
 
-def _workspace_tree(workdir: str) -> list[dict]:
-    """工作区顶层条目（目录 / 文件），用于工作区校验与文件树。"""
+def _workspace_tree(workdir: str, deep: bool = False, max_depth: int = 5) -> list[dict]:
+    """工作区条目：默认顶层平铺（校验/下拉用）；deep=True 返回递归树（文件树用）。"""
     root = Path(workdir)
     if not root.is_dir():
         raise ValueError(f"工作区不存在：{workdir}")
-    entries = []
-    for p in sorted(root.iterdir(), key=lambda x: (x.is_file(), x.name.lower())):
-        if p.name.startswith(".") or p.name in _SKIP_DIRS:
-            continue
-        entry = {"name": p.name, "type": "dir" if p.is_dir() else "file"}
-        if p.is_file():
-            entry["mtime"] = p.stat().st_mtime  # 供前端选「最新修改文件」
-        entries.append(entry)
-    return entries
+    if not deep:
+        entries = []
+        for p in sorted(root.iterdir(), key=lambda x: (x.is_file(), x.name.lower())):
+            if p.name.startswith(".") or p.name in _SKIP_DIRS:
+                continue
+            entry = {"name": p.name, "type": "dir" if p.is_dir() else "file"}
+            if p.is_file():
+                entry["mtime"] = p.stat().st_mtime  # 供前端选「最新修改文件」
+            entries.append(entry)
+        return entries
+
+    def walk(d: Path, depth: int) -> list[dict]:
+        items = []
+        for p in sorted(d.iterdir(), key=lambda x: (x.is_file(), x.name.lower())):
+            if p.name.startswith(".") or p.name in _SKIP_DIRS:
+                continue
+            rel = str(p.relative_to(root))
+            if p.is_dir():
+                items.append({
+                    "name": p.name,
+                    "path": rel,
+                    "type": "dir",
+                    "children": walk(p, depth + 1) if depth < max_depth else [],
+                })
+            else:
+                items.append({
+                    "name": p.name,
+                    "path": rel,
+                    "type": "file",
+                    "mtime": p.stat().st_mtime,
+                })
+        return items
+
+    return walk(root, 1)
 
 
 class _SseWriter:
@@ -452,11 +691,13 @@ class AgentHandler(BaseHTTPRequestHandler):
             self.send_error(404)
 
     def _handle_tree(self) -> None:
-        """工作区校验 + 顶层文件树。"""
+        """工作区校验 + 文件树（deep=1 递归）。"""
         parsed = urllib.parse.urlparse(self.path)
-        workdir = (urllib.parse.parse_qs(parsed.query).get("workdir") or [None])[0] or self.server.workdir
+        query = urllib.parse.parse_qs(parsed.query)
+        workdir = (query.get("workdir") or [None])[0] or self.server.workdir
+        deep = (query.get("deep") or ["0"])[0] in ("1", "true")
         try:
-            tree = _workspace_tree(workdir)
+            tree = _workspace_tree(workdir, deep=deep)
             result = {"ok": True, "workdir": workdir, "tree": tree}
         except Exception as exc:  # noqa: BLE001
             result = {"ok": False, "error": str(exc)}
@@ -573,6 +814,27 @@ class AgentHandler(BaseHTTPRequestHandler):
                 )
             except Exception as exc:  # noqa: BLE001
                 result = {"ok": False, "path": None, "error": str(exc)}
+            data = json.dumps(result, ensure_ascii=False).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+        elif self.path == "/exec":
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                body = json.loads(self.rfile.read(length) or b"{}")
+                workdir = str(body.get("workdir") or self.server.workdir)
+                command = str(body.get("command", "")).strip()
+                if not command:
+                    raise ValueError("命令为空")
+                if not Path(workdir).is_dir():
+                    raise ValueError(f"工作区不存在：{workdir}")
+                output = execute_command({"command": command}, workdir)
+                # 终端是用户直接输入（用户即确认者），仅标记危险命令供前端提示
+                result = {"ok": True, "output": output, "dangerous": is_dangerous(command)}
+            except Exception as exc:  # noqa: BLE001
+                result = {"ok": False, "error": str(exc)}
             data = json.dumps(result, ensure_ascii=False).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")

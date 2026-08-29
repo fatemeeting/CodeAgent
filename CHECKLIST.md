@@ -111,3 +111,10 @@
 - [x] O2 右栏文件页：右上文件名 tab + 下拉切换 + 行号视图
 - [x] O3 任务完成后自动展示最新修改文件
 - [x] O4 `GET /file` 内容 / 不存在 / 越界防护
+
+## P. 迭代 6 v2（Editor Window · 切片 6.8）
+
+- [x] P1 Editor 三栏：文件树 | Monaco（CDN，离线回退）| 聊天
+- [x] P2 底部终端：`/exec` 复用 execute_command + dangerous 标记 + 可折叠
+- [x] P3 模式一键切换且对话状态不丢（消息重放）
+- [x] P4 `/tree?deep=1` 递归文件树
