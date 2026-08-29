@@ -65,10 +65,27 @@ INDEX_HTML = """<!DOCTYPE html>
   .ws-chip { margin-left: auto; display: flex; align-items: center; gap: 8px; font-family: Consolas, monospace; font-size: 13px; border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; background: var(--code-bg); }
   .ws-chip button { border: none; background: none; cursor: pointer; color: var(--accent); font-size: 13px; font-weight: 600; }
   #content { flex: 1; display: flex; min-height: 0; }
-  .pane { padding: 16px; overflow: auto; }
+  .pane { display: flex; flex-direction: column; overflow: hidden; }
   #pane-left { width: 42%; border-right: 1px solid var(--border); }
   #pane-right { flex: 1; }
-  .placeholder { color: var(--muted); font-size: 14px; display: flex; align-items: center; justify-content: center; height: 100%; border: 1px dashed var(--border); border-radius: 12px; }
+  .placeholder { color: var(--muted); font-size: 14px; display: flex; align-items: center; justify-content: center; height: 100%; border: 1px dashed var(--border); border-radius: 12px; margin: 16px; }
+  /* 对话区（Agent Window 左栏） */
+  #chat-history { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  #chat-inputbar { display: flex; gap: 8px; padding: 12px 16px; background: var(--surface); border-top: 1px solid var(--border); }
+  #chat-input { flex: 1; resize: none; height: 44px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; background: var(--bg); color: var(--text); }
+  .msg { display: flex; }
+  .msg.user { justify-content: flex-end; }
+  .bubble { max-width: 85%; padding: 8px 12px; border-radius: 12px; white-space: pre-wrap; word-break: break-word; font-size: 13px; line-height: 1.55; }
+  .msg.user .bubble { background: var(--accent); color: #fff; }
+  .msg.agent .bubble { background: var(--surface); border: 1px solid var(--border); font-family: Consolas, "Courier New", monospace; }
+  .tool { color: #b33a00; font-weight: 600; }
+  .obs { color: var(--ok); }
+  /* 文件页（右栏） */
+  #file-header { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 12px 16px 8px; }
+  #file-tab { font-family: Consolas, monospace; font-size: 13px; font-weight: 600; background: var(--surface); border: 1px solid var(--border); border-radius: 6px 6px 0 0; padding: 6px 12px; }
+  #file-select { font-size: 12px; border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; background: var(--surface); color: var(--text); }
+  #file-view { flex: 1; margin: 0 16px 16px; background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px; overflow: auto; font-family: Consolas, monospace; font-size: 13px; line-height: 1.5; }
+  #file-view .ln { display: inline-block; width: 40px; color: var(--muted); text-align: right; margin-right: 12px; user-select: none; }
   /* 弹层 */
   #modal { display: none; position: fixed; inset: 0; background: rgba(38,37,30,.45); align-items: center; justify-content: center; z-index: 10; padding: 24px; }
   #modal .mgr-card { box-shadow: 0 8px 40px rgba(38,37,30,.2); }
@@ -89,8 +106,8 @@ INDEX_HTML = """<!DOCTYPE html>
     </div>
   </div>
   <div id="content">
-    <div id="pane-left" class="pane"><div class="placeholder">对话区（切片 6.7）</div></div>
-    <div id="pane-right" class="pane"><div class="placeholder">代码文件页（切片 6.7）</div></div>
+    <div id="pane-left" class="pane"></div>
+    <div id="pane-right" class="pane"></div>
   </div>
 </div>
 <div id="modal"><div id="modal-card"></div></div>
@@ -198,6 +215,7 @@ function enterMain() {
   document.getElementById('welcome').style.display = 'none';
   document.getElementById('main').style.display = 'flex';
   document.getElementById('ws-name').textContent = state.workspace;
+  setMode('agent');
   closeManager();
 }
 
@@ -214,9 +232,126 @@ function closeManager() {
 function setMode(mode) {
   document.getElementById('mode-agent').classList.toggle('active', mode === 'agent');
   document.getElementById('mode-editor').classList.toggle('active', mode === 'editor');
-  document.getElementById('pane-left').innerHTML = mode === 'agent'
-    ? '<div class="placeholder">对话区（切片 6.7）</div>'
-    : '<div class="placeholder">文件树（切片 6.8）</div>';
+  if (mode === 'agent') { buildAgentLeft(); buildAgentRight(); }
+  else {
+    document.getElementById('pane-left').innerHTML = '<div class="placeholder">文件树（切片 6.8）</div>';
+    document.getElementById('pane-right').innerHTML = '<div class="placeholder">代码编辑器（切片 6.8 · Monaco）</div>';
+  }
+}
+
+/* ---------- Agent Window 左栏：对话 ---------- */
+function buildAgentLeft() {
+  document.getElementById('pane-left').innerHTML = `
+    <div id="chat-history"></div>
+    <div id="chat-inputbar">
+      <textarea id="chat-input" placeholder="输入编程任务，Enter 发送（Shift+Enter 换行）"></textarea>
+      <button class="btn-accent" onclick="sendTask()">发送</button>
+    </div>`;
+  document.getElementById('chat-input').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendTask(); }
+  });
+}
+
+function addMsg(role) {
+  const wrap = document.createElement('div');
+  wrap.className = 'msg ' + role;
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  bubble._raw = '';
+  wrap.appendChild(bubble);
+  document.getElementById('chat-history').appendChild(wrap);
+  const h = document.getElementById('chat-history');
+  h.scrollTop = h.scrollHeight;
+  return bubble;
+}
+
+function renderBubble(bubble) {
+  bubble.innerHTML = '';
+  bubble._raw.split('\\n').forEach(function (line, i) {
+    if (i > 0) bubble.appendChild(document.createElement('br'));
+    let node;
+    if (line.indexOf('[步骤') === 0) { node = document.createElement('span'); node.className = 'tool'; }
+    else if (line.indexOf('        ↳') === 0) { node = document.createElement('span'); node.className = 'obs'; }
+    else { node = document.createElement('span'); }
+    node.textContent = line;
+    bubble.appendChild(node);
+  });
+}
+
+function sendTask() {
+  const input = document.getElementById('chat-input');
+  const task = input.value.trim();
+  if (!task) return;
+  input.value = '';
+  const ub = addMsg('user'); ub._raw = task; renderBubble(ub);
+  const ab = addMsg('agent');
+  const es = new EventSource('/events?task=' + encodeURIComponent(task) + '&workdir=' + encodeURIComponent(state.workspace));
+  es.onmessage = function (e) {
+    if (e.data === '[DONE]') { es.close(); ab._raw += '\\n✓ 完成'; renderBubble(ab); refreshFiles(); return; }
+    ab._raw += JSON.parse(e.data).text;
+    renderBubble(ab);
+    const h = document.getElementById('chat-history');
+    h.scrollTop = h.scrollHeight;
+  };
+  es.onerror = function () { es.close(); };
+}
+
+/* ---------- Agent Window 右栏：文件页 ---------- */
+function buildAgentRight() {
+  document.getElementById('pane-right').innerHTML = `
+    <div id="file-header">
+      <select id="file-select" onchange="loadFile(this.value)"></select>
+      <span id="file-tab">—</span>
+    </div>
+    <div id="file-view"><div class="placeholder">任务完成后这里展示代码文件</div></div>`;
+}
+
+async function refreshFiles() {
+  try {
+    const resp = await fetch('/tree?workdir=' + encodeURIComponent(state.workspace));
+    const data = await resp.json();
+    if (!data.ok) return;
+    const files = data.tree.filter(e => e.type === 'file');
+    const sel = document.getElementById('file-select');
+    sel.innerHTML = '';
+    files.forEach(f => {
+      const opt = document.createElement('option');
+      opt.value = f.name;
+      opt.textContent = f.name;
+      sel.appendChild(opt);
+    });
+    files.sort((a, b) => (b.mtime || 0) - (a.mtime || 0));
+    if (files.length) loadFile(files[0].name);
+  } catch (e) { /* 忽略 */ }
+}
+
+async function loadFile(name) {
+  try {
+    const resp = await fetch('/file?workdir=' + encodeURIComponent(state.workspace) + '&path=' + encodeURIComponent(name));
+    const data = await resp.json();
+    if (data.ok) {
+      document.getElementById('file-tab').textContent = data.name;
+      renderFile(data.content);
+    } else {
+      document.getElementById('file-view').innerHTML = '<div class="placeholder">' + (data.error || '加载失败') + '</div>';
+    }
+  } catch (e) {
+    document.getElementById('file-view').innerHTML = '<div class="placeholder">请求失败</div>';
+  }
+}
+
+function renderFile(content) {
+  const view = document.getElementById('file-view');
+  view.innerHTML = '';
+  content.split('\\n').forEach(function (line, i) {
+    const div = document.createElement('div');
+    const num = document.createElement('span');
+    num.className = 'ln';
+    num.textContent = String(i + 1);
+    div.appendChild(num);
+    div.appendChild(document.createTextNode(line === '' ? ' ' : line));
+    view.appendChild(div);
+  });
 }
 
 (async function boot() {
@@ -276,7 +411,10 @@ def _workspace_tree(workdir: str) -> list[dict]:
     for p in sorted(root.iterdir(), key=lambda x: (x.is_file(), x.name.lower())):
         if p.name.startswith(".") or p.name in _SKIP_DIRS:
             continue
-        entries.append({"name": p.name, "type": "dir" if p.is_dir() else "file"})
+        entry = {"name": p.name, "type": "dir" if p.is_dir() else "file"}
+        if p.is_file():
+            entry["mtime"] = p.stat().st_mtime  # 供前端选「最新修改文件」
+        entries.append(entry)
     return entries
 
 
@@ -308,6 +446,8 @@ class AgentHandler(BaseHTTPRequestHandler):
             self._handle_events()
         elif self.path.startswith("/tree"):
             self._handle_tree()
+        elif self.path.startswith("/file"):
+            self._handle_file()
         else:
             self.send_error(404)
 
@@ -318,6 +458,34 @@ class AgentHandler(BaseHTTPRequestHandler):
         try:
             tree = _workspace_tree(workdir)
             result = {"ok": True, "workdir": workdir, "tree": tree}
+        except Exception as exc:  # noqa: BLE001
+            result = {"ok": False, "error": str(exc)}
+        data = json.dumps(result, ensure_ascii=False).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _handle_file(self) -> None:
+        """读取工作区内文件内容（路径越界防护）。"""
+        parsed = urllib.parse.urlparse(self.path)
+        query = urllib.parse.parse_qs(parsed.query)
+        workdir = (query.get("workdir") or [None])[0] or self.server.workdir
+        rel = (query.get("path") or [""])[0]
+        try:
+            root = Path(workdir).resolve()
+            if not root.is_dir():
+                raise ValueError(f"工作区不存在：{workdir}")
+            target = (root / rel).resolve()
+            if not str(target).startswith(str(root)):
+                raise ValueError(f"路径越界：{rel}")
+            if not target.is_file():
+                raise ValueError(f"文件不存在：{rel}")
+            text = target.read_text(encoding="utf-8", errors="replace")
+            if len(text) > 200_000:
+                text = text[:200_000] + "\n...（文件过大已截断）"
+            result = {"ok": True, "path": rel, "name": target.name, "content": text}
         except Exception as exc:  # noqa: BLE001
             result = {"ok": False, "error": str(exc)}
         data = json.dumps(result, ensure_ascii=False).encode("utf-8")

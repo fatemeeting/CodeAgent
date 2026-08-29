@@ -168,3 +168,32 @@ def test_web_tree(tmp_path):
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_web_file(tmp_path):
+    server = ThreadingHTTPServer(("127.0.0.1", 0), AgentHandler)
+    server.config = _config()
+    server.workdir = "."
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = server.server_address[1]
+    (tmp_path / "a.py").write_text("print(1)", encoding="utf-8")
+    base = f"http://127.0.0.1:{port}/file?workdir=" + urllib.parse.quote(str(tmp_path)) + "&path="
+    try:
+        with urllib.request.urlopen(base + "a.py") as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+        assert result["ok"] is True
+        assert result["content"] == "print(1)"
+        assert result["name"] == "a.py"
+        # 不存在
+        with urllib.request.urlopen(base + "nope.py") as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+        assert result["ok"] is False
+        # 越界
+        with urllib.request.urlopen(base + urllib.parse.quote("../outside.py")) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+        assert result["ok"] is False
+        assert "越界" in result["error"]
+    finally:
+        server.shutdown()
+        server.server_close()

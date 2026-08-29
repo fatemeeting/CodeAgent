@@ -325,4 +325,17 @@
 - **检查证据**：
   - `pytest -q` → **62 passed**
   - 冒烟：页面含视觉变量/管理器三要素/welcome+main+modal 骨架/Agent·Editor 模式切换；`/tree` 有效目录 14 条目、无效目录报错
+- **人工放行决定**：通过
+
+## 迭代 6 v2 · 切片 6.7：Agent Window（对话 + 文件页）
+
+- **时间**：2026-08-28
+- **给 Agent 的任务**：实现 Agent Window——左栏对话（气泡 + SSE 流式 + 工具着色 + Enter 发送）、右栏文件页（右上文件名 tab + 下拉切换 + 行号视图）、任务完成后自动展示最新修改文件
+- **Agent 修改了什么**：
+  - `agent/web.py`：`GET /file` + `_handle_file`（`resolve` 越界防护 + 200KB 截断）；`_workspace_tree` 文件项增加 `mtime`；`INDEX_HTML` 左栏对话区（`buildAgentLeft`/`addMsg`/`renderBubble`/`sendTask` SSE）+ 右栏文件页（`buildAgentRight`/`refreshFiles` 自动选最新 mtime/`loadFile`/`renderFile` 行号视图）；`setMode` 重建双栏
+  - `tests/test_web.py`（+1：/file 内容/不存在/越界）
+  - 更新 `CHECKLIST.md`（O 节）、`docs/context-pack.md`、`docs/gate-checklist.md`
+- **检查证据**：
+  - `pytest -q` → **63 passed**
+  - 冒烟：页面含对话区/文件页全部标记；`/file` 返回 README.txt 内容；端到端 SSE 任务生成 hello67.py → `/tree` 含 mtime → `/file` 返回 `print("hi67")`
 - **人工放行决定**：（待用户确认：通过 / 重试 / 降级 / 停止）
