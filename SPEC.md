@@ -69,6 +69,7 @@ coding-agent/
 ├── agent/                # 源码（阶段 1 起）
 ├── tests/                # 单元测试（mock LLM，免 key）
 └── docs/                 # 契约工作文件 + prompts/
+```
 
 ## 7. 迭代 2（增量：多轮会话 + 持久化）
 
@@ -109,4 +110,13 @@ coding-agent/
 1. **服务端会话存储（决策：JSON 文件）**：`agent/sessions.py` 的 `SessionStore`——`data/sessions/<id>.json` 单文件一会话 + `index.json` 索引，线程安全（RLock）；会话绑定工作区。
 2. **Session CRUD 端点**：`GET/POST /sessions`、`GET/DELETE /sessions/<id>`、`POST /sessions/<id>/messages`（全量保存消息）。
 3. **前端会话管理与恢复**（切片 7.2/7.3）：会话列表 / 新建 / 切换 / 重命名 / 删除；刷新后恢复最近会话（消息重放 + 工作区 + 当前文件）。
-```
+
+## 13. 迭代 7 · 切片 7.2（前端会话管理 UI + 消息落盘）
+
+范围（仅前端，`agent/web.py` 内嵌页面；后端端点 7.1 已就绪）：
+
+1. **会话栏 UI**：顶栏新增会话下拉（`/sessions` 列表）+ 新建 / 重命名 / 删除按钮；无会话时发送任务自动建会话（名称取任务前 24 字，工作区为当前工作区）。
+2. **切换会话**：`GET /sessions/<id>` → 工作区切到会话绑定目录（同步 `ws-name` 与 localStorage、重载文件树），对话区重放会话消息。
+3. **消息落盘**：用户消息入列后与 agent 运行结束（`[DONE]`）时，`POST /sessions/<id>/messages` 全量保存 `{role, raw}` 消息列表。
+
+非目标（留给 7.3）：刷新页面后自动恢复最近会话、当前文件恢复、跨标签页同步。

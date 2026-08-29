@@ -430,3 +430,18 @@
   - `pytest -q` → **72 passed**（此前 65）
   - 真实服务器冒烟（`127.0.0.1:8420`，临时数据目录）：list empty → create → get → save messages → rename → delete → 缺失 get 返回 `ok:false` → list empty，全链路 `SMOKE ALL OK`
 - **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
+
+## 迭代 7 切片 7.2：前端会话管理 UI + 消息落盘
+
+- **时间**：2026-08-29
+- **给 Agent 的任务**：切片 7.2 前端会话管理——顶栏会话栏（列表 / 新建 / 切换 / 重命名 / 删除）；无会话时发送任务自动建会话；切换会话 = 切工作区 + 消息重放；用户消息入列与运行结束（`[DONE]`）时消息落盘。后端端点（7.1）不动。
+- **Agent 修改了什么**（仅 `agent/web.py` 内嵌页面）：
+  - CSS：新增 `.sess-bar` 会话栏样式（下拉 + 三个图标按钮，悬停橙色描边）
+  - 顶栏 HTML：brand 右侧插入会话栏（`sess-select` / `sess-new` / `sess-rename` / `sess-del`）
+  - JS：新增会话管理块——`loadSessions`（GET `/sessions` 填下拉）、`ensureSession`（无会话时 POST 建会话，名取任务前 24 字、工作区为当前工作区）、`switchSession`（GET 详情 → 切工作区同步 ws-name/localStorage + `buildChat` 消息重放 + 重载文件树）、`createSession`/`renameSession`/`deleteSession`（含 confirm 确认）、`saveMessages`（POST 全量落盘 + `sessionSaving` 去重）
+  - 钩子：`sendTask` 改 async，推送用户消息后 `ensureSession(task)` + `saveMessages()`；SSE `[DONE]` 分支追加 `saveMessages()`；`enterMain` 里 `loadSessions()`
+- **检查证据**：
+  - `pytest -q` → **72 passed**（后端未改，无回归）
+  - 真实服务冒烟：页面 13 个标记全部就位；前端会话流 HTTP 仿真（自动建会话 → 落盘 → 重放 → 重命名 → 列表 → 删除）全过
+  - `node --check` 提取的 2 个内联 `<script>` → 语法通过（EXIT=0）
+- **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）

@@ -149,3 +149,9 @@
 - [x] V1 `agent/sessions.py` `SessionStore`：`data/sessions/<id>.json` + `index.json`，线程安全（RLock），名称净化与 id 去重
 - [x] V2 REST 端点：GET `/sessions`、GET `/sessions/<id>`、POST `/sessions`、POST `/sessions/<id>`（重命名）、POST `/sessions/<id>/messages`、DELETE `/sessions/<id>`，统一 `{ok, ...}` 响应
 - [x] V3 `data/` 加入 `.gitignore`；测试覆盖（`test_sessions.py` 6 项 + `test_web_sessions` 1 项），72 passed + 真实服务冒烟通过
+
+## W. 迭代 7 切片 7.2 前端会话管理 UI + 消息落盘
+
+- [x] W1 顶栏会话栏：下拉列表（`/sessions`）+ 新建 / 重命名 / 删除按钮；无会话时发送任务自动建会话
+- [x] W2 切换会话：工作区切到会话绑定目录（同步 ws-name / localStorage / 重载文件树），对话区重放会话消息
+- [x] W3 消息落盘：用户消息入列后与 `[DONE]` 时 `POST /sessions/<id>/messages` 全量保存 `{role, raw}`

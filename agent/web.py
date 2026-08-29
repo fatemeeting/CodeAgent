@@ -63,6 +63,11 @@ INDEX_HTML = """<!DOCTYPE html>
   .brand { font-weight: 700; font-size: 14px; letter-spacing: -.3px; }
   .ws-chip { margin-left: auto; display: flex; align-items: center; gap: 8px; font-family: Consolas, monospace; font-size: 13px; border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; background: var(--code-bg); }
   .ws-chip button { border: none; background: none; cursor: pointer; color: var(--accent); font-size: 13px; font-weight: 600; }
+  /* 会话栏（迭代 7 · 7.2） */
+  .sess-bar { display: flex; align-items: center; gap: 6px; }
+  .sess-bar select { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 8px; padding: 6px 8px; font-size: 13px; max-width: 240px; }
+  .sess-bar button { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 8px; padding: 6px 9px; cursor: pointer; font-size: 12px; line-height: 1; }
+  .sess-bar button:hover { background: var(--code-bg); border-color: var(--accent); }
   #content { flex: 1; display: flex; min-height: 0; }
   .pane { display: flex; flex-direction: column; overflow: hidden; }
   #pane-left { width: 240px; }
@@ -139,6 +144,12 @@ INDEX_HTML = """<!DOCTYPE html>
 <div id="main">
   <div id="topbar">
     <span class="brand">🤖 编程智能体</span>
+    <div class="sess-bar">
+      <select id="sess-select" onchange="switchSession(this.value)" title="选择会话"></select>
+      <button id="sess-new" onclick="createSession()" title="新建会话">＋</button>
+      <button id="sess-rename" onclick="renameSession()" title="重命名当前会话">✎</button>
+      <button id="sess-del" onclick="deleteSession()" title="删除当前会话">🗑</button>
+    </div>
     <div class="ws-chip">
       <span id="ws-name"></span>
       <button onclick="openManager()" title="切换工作区">🔄 切换</button>
@@ -261,6 +272,7 @@ function enterMain() {
   document.getElementById('main').style.display = 'flex';
   document.getElementById('ws-name').textContent = state.workspace;
   buildLayout();
+  loadSessions();
   closeManager();
 }
 
@@ -277,6 +289,121 @@ function closeManager() {
 let chatMessages = [];
 let editor = null;
 let currentFile = null;
+
+/* ---------- 会话管理（迭代 7 · 切片 7.2：列表/新建/切换/重命名/删除 + 消息落盘） ---------- */
+let currentSessionId = null;
+let sessionSaving = false;
+
+async function loadSessions() {
+  try {
+    const resp = await fetch('/sessions');
+    const data = await resp.json();
+    if (!data.ok) return;
+    const sel = document.getElementById('sess-select');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">（新会话）</option>';
+    data.sessions.forEach(function (s) {
+      const opt = document.createElement('option');
+      opt.value = s.id;
+      opt.textContent = s.name || s.id;
+      sel.appendChild(opt);
+    });
+    sel.value = currentSessionId || '';
+  } catch (e) { /* 忽略 */ }
+}
+
+async function ensureSession(task) {
+  if (currentSessionId) return;
+  try {
+    const resp = await fetch('/sessions', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({workspace: state.workspace, name: (task || '新会话').slice(0, 24)}),
+    });
+    const data = await resp.json();
+    if (data.ok && data.session) {
+      currentSessionId = data.session.id;
+      await loadSessions();
+    }
+  } catch (e) { /* 忽略 */ }
+}
+
+async function switchSession(id) {
+  if (!id) return;
+  try {
+    const resp = await fetch('/sessions/' + encodeURIComponent(id));
+    const data = await resp.json();
+    if (!data.ok || !data.session) return;
+    const s = data.session;
+    currentSessionId = s.id;
+    state.workspace = s.workspace || state.workspace;
+    localStorage.setItem('agent.workspace', state.workspace);
+    document.getElementById('ws-name').textContent = state.workspace;
+    chatMessages = (s.messages || []).map(function (m) { return {role: m.role, raw: m.raw}; });
+    buildChat('pane-right');
+    loadTree();
+    refreshFiles();
+  } catch (e) { /* 忽略 */ }
+}
+
+async function createSession() {
+  try {
+    const resp = await fetch('/sessions', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({workspace: state.workspace, name: '新会话'}),
+    });
+    const data = await resp.json();
+    if (!data.ok || !data.session) return;
+    currentSessionId = data.session.id;
+    await loadSessions();
+    chatMessages = [];
+    buildChat('pane-right');
+  } catch (e) { /* 忽略 */ }
+}
+
+async function renameSession() {
+  if (!currentSessionId) return;
+  const sel = document.getElementById('sess-select');
+  const old = sel && sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex].textContent : '';
+  const name = window.prompt('会话名称：', old);
+  if (name === null || !name.trim()) return;
+  try {
+    const resp = await fetch('/sessions/' + encodeURIComponent(currentSessionId), {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({name: name}),
+    });
+    const data = await resp.json();
+    if (data.ok) await loadSessions();
+  } catch (e) { /* 忽略 */ }
+}
+
+async function deleteSession() {
+  if (!currentSessionId) return;
+  if (!window.confirm('删除当前会话及其对话记录？')) return;
+  const id = currentSessionId;
+  currentSessionId = null;
+  chatMessages = [];
+  buildChat('pane-right');
+  try {
+    await fetch('/sessions/' + encodeURIComponent(id), {method: 'DELETE'});
+    await loadSessions();
+  } catch (e) { /* 忽略 */ }
+}
+
+async function saveMessages() {
+  if (!currentSessionId || sessionSaving) return;
+  sessionSaving = true;
+  try {
+    await fetch('/sessions/' + encodeURIComponent(currentSessionId) + '/messages', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({messages: chatMessages}),
+    });
+  } catch (e) { /* 忽略 */ }
+  finally { sessionSaving = false; }
+}
 
 function initSplitters() {
   const left = document.getElementById('pane-left');
@@ -463,7 +590,7 @@ function renderMarkdown(text) {
   return frag;
 }
 
-function sendTask() {
+async function sendTask() {
   const input = document.getElementById('chat-input');
   const task = input.value.trim();
   if (!task) return;
@@ -473,6 +600,8 @@ function sendTask() {
   chatMessages.push({role: 'agent', raw: ''});
   const bubble = appendMsg('agent', '');
   const idx = chatMessages.length - 1;
+  await ensureSession(task);
+  saveMessages();
   const es = new EventSource('/events?task=' + encodeURIComponent(task) + '&workdir=' + encodeURIComponent(state.workspace));
   es.onmessage = function (e) {
     if (e.data === '[DONE]') {
@@ -481,6 +610,7 @@ function sendTask() {
       bubble._raw = chatMessages[idx].raw;
       renderBubble(bubble);
       refreshFiles();
+      saveMessages();
       return;
     }
     chatMessages[idx].raw += JSON.parse(e.data).text;

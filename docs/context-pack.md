@@ -1,22 +1,24 @@
 # context-pack.md — 当前阶段上下文包
 
-> 当前阶段：**迭代 7 · 切片 7.1（Session 后端：模型 + CRUD 端点）**
+> 当前阶段：**迭代 7 · 切片 7.2（前端会话管理 UI + 消息落盘）**
 
 ## 当前阶段目标
 
-服务端会话存储：`agent/sessions.py` 的 `SessionStore`（JSON 文件 + 索引、线程安全）；`agent/web.py` 增 `/sessions` 系列端点；`data/` 入 `.gitignore`。前端 UI 与恢复在 7.2/7.3。
+`agent/web.py` 内嵌页面新增会话栏（列表 / 新建 / 切换 / 重命名 / 删除）；无会话时发送任务自动建会话；切换会话 = 切工作区 + 消息重放；用户消息入列与 `[DONE]` 时全量保存消息到服务端。后端 `/sessions` 端点（7.1）已就绪，本切片不动后端。
 
 ## 必须读
 
-- `SPEC.md`（迭代 7 范围）
-- `agent/web.py`（`do_GET` / `do_POST` 路由结构与 `serve`）
+- `SPEC.md` 第 13 节（切片 7.2 范围与非目标）
+- `agent/web.py`（内嵌 HTML/JS：`buildChat` / `sendTask` / SSE `[DONE]` / `enterMain` / 顶栏结构）
+- `agent/sessions.py`（端点返回结构：`{ok, session/sessions}`、`get_session` 含 `messages`）
 - `docs/context-snapshot.md`
 
 ## 不得读 / 不得改
 
 - `.env`（真实凭据）
+- 后端 `agent/sessions.py` 与 `/sessions` 端点逻辑（7.1 已放行，只读）
 
 ## 输出要求
 
-- 产出：`agent/sessions.py`、`agent/web.py`（端点 + `server.sessions`）、`tests/test_sessions.py`、`tests/test_web.py`（+session 端点）、`.gitignore`（+`data/`）
-- 验收：`pytest -q` 全绿；冒烟（建会话/存消息/删除）
+- 产出：`agent/web.py`（会话栏 HTML/CSS/JS + 落盘钩子）
+- 验收：`pytest -q` 全绿（72）；提取内嵌 JS 过 `node --check`；真实服务冒烟（页面标记 + `/sessions` CRUD 往返）
