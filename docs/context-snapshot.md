@@ -29,6 +29,7 @@
 - 迭代 6 v2 修复通过：对话 Markdown 渲染（零依赖渲染器）+ SYSTEM_PROMPT 代码纯净规则；`pytest` 65 passed
 - 迭代 6 v2 布局精简通过：删除 Agent Window/模式切换与文件下拉框（仅 Editor Window：文件树 | Monaco | 聊天 | 终端），文件名 tab 按需显示
 - 迭代 6 v2 交互修复通过：三栏拖拽（localStorage 持久化）+ 文件树点击显示（Monaco 竞态修复 + CDN 兜底）；`pytest` 65 passed
+- 迭代 6 v2 稳定性修复通过：逐栏 try/catch 隔离 + Monaco async 加载/双 CDN/超时回退（中/右栏显示恢复）；`pytest` 65 passed
 - CI 修复与工作流：跨平台测试修复（`del`→`os.remove`）+ 堵 `os.remove` 绕过；推送工作流确立（GIT_SSH + Actions 轮询）
 
 ## 未完成 / 未决

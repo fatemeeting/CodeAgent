@@ -388,4 +388,18 @@
 - **检查证据**：
   - `pytest -q` → **65 passed**
   - 冒烟：页面含分隔条/拖拽/currentFile/兜底标记；模拟点击流——`/tree?deep=1` 返回 `sub\x.py`（Windows 反斜杠）→ `/file` 用该路径返回 `print(3)` ✓
+- **人工放行决定**：通过
+
+## 迭代 6 v2 稳定性修复：中/右栏无法显示
+
+- **时间**：2026-08-28
+- **问题**：仅资源管理器（左栏）显示，中间 Monaco 栏与右侧聊天栏空白——根因：`buildLayout` 顺序调用各栏构建，`buildEditor` 的 `require([...])` 在异常环境（CDN 被墙/伪造 `window.require`）下抛同步异常，中断后续 `buildChat`/`buildTerminal`，且无兜底时中间栏留白
+- **修复**（`agent/web.py`）：
+  - `buildLayout` 逐栏 try/catch 隔离（单栏失败不影响其它栏）
+  - Monaco 加载全面防御：head 脚本改 `async`（不阻塞页面）+ onload 才 config + jsdelivr→unpkg 双 CDN 兜底；`ensureMonaco` 三态（已就绪/AMD 加载/回退）+ **8 秒超时回退**行号视图；`initEditor`/`fallbackEditor` 幂等守卫防重复初始化
+  - `loadFile` 的 `setModelLanguage` 异常兜底；`state.recents` JSON 解析容错
+- **检查证据**：
+  - `node --check` 提取的整页 JS → 语法通过（EXIT=0）
+  - `pytest -q` → **65 passed**
+  - 冒烟：async loader/双 CDN 兜底/超时回退/逐栏隔离/容错标记全部就位
 - **人工放行决定**：（待用户确认：通过 / 重试 / 降级 / 停止）

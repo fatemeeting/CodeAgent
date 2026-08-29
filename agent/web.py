@@ -115,20 +115,24 @@ INDEX_HTML = """<!DOCTYPE html>
   #modal { display: none; position: fixed; inset: 0; background: rgba(38,37,30,.45); align-items: center; justify-content: center; z-index: 10; padding: 24px; }
   #modal .mgr-card { box-shadow: 0 8px 40px rgba(38,37,30,.2); }
 </style>
-<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0/min/vs/loader.js" onerror="fallbackMonaco()"></script>
+<script async src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0/min/vs/loader.js" onload="monacoCdn('jsdelivr')" onerror="fallbackMonaco()"></script>
 <script>
-  function configMonaco(base) {
-    require.config({ paths: { vs: base } });
-    require(['vs/editor/editor.main'], function () { window.monacoReady = true; });
+  function monacoCdn(which) {
+    const base = which === 'jsdelivr'
+      ? 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0/min/vs'
+      : 'https://unpkg.com/monaco-editor@0.52.0/min/vs';
+    try {
+      require.config({ paths: { vs: base } });
+      require(['vs/editor/editor.main'], function () { window.monacoReady = true; });
+    } catch (e) { window.require = undefined; }
   }
   function fallbackMonaco() {
     const s = document.createElement('script');
+    s.async = true;
     s.src = 'https://unpkg.com/monaco-editor@0.52.0/min/vs/loader.js';
-    s.onload = function () { configMonaco('https://unpkg.com/monaco-editor@0.52.0/min/vs'); };
+    s.onload = function () { monacoCdn('unpkg'); };
+    s.onerror = function () { window.require = undefined; };
     document.head.appendChild(s);
-  }
-  if (window.require) {
-    configMonaco('https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0/min/vs');
   }
 </script>
 </head>
@@ -155,7 +159,10 @@ INDEX_HTML = """<!DOCTYPE html>
 <script>
 const state = {
   workspace: localStorage.getItem('agent.workspace') || '',
-  recents: JSON.parse(localStorage.getItem('agent.recents') || '[]'),
+  recents: (function () {
+    try { return JSON.parse(localStorage.getItem('agent.recents') || '[]'); }
+    catch (e) { return []; }
+  })(),
 };
 let activeManager = null;
 let validateTimer = null;
@@ -317,10 +324,10 @@ function initSplitters() {
 }
 
 function buildLayout() {
-  buildFileTree();
-  buildEditor();
-  buildChat('pane-right');
-  buildTerminal();
+  try { buildFileTree(); } catch (e) { console.error('buildFileTree', e); }
+  try { buildEditor(); } catch (e) { console.error('buildEditor', e); }
+  try { buildChat('pane-right'); } catch (e) { console.error('buildChat', e); }
+  try { buildTerminal(); } catch (e) { console.error('buildTerminal', e); }
 }
 
 /* ---------- 对话（Agent 左栏 / Editor 右栏复用；状态存 chatMessages 重放） ---------- */
@@ -479,40 +486,65 @@ function sendTask() {
 }
 
 /* ---------- 中央编辑器（Monaco，CDN；离线回退行号视图） ---------- */
+let editorInited = false;
+let monacoTimedOut = false;
+
+function initEditor() {
+  if (editorInited) return;
+  editorInited = true;
+  const host = document.getElementById('editor-host');
+  if (!host) return;
+  host.className = '';
+  try {
+    editor = monaco.editor.create(host, {
+      value: currentFile ? currentFile.content : '',
+      language: currentFile ? langOf(currentFile.name) : 'plaintext',
+      theme: 'vs',
+      automaticLayout: true,
+      fontSize: 13,
+      minimap: { enabled: false },
+    });
+  } catch (e) {
+    editor = null;
+    fallbackEditor();
+  }
+}
+
+function fallbackEditor() {
+  if (editorInited && editor) return;
+  editorInited = true;
+  editor = null;
+  const host = document.getElementById('editor-host');
+  if (!host) return;
+  host.className = 'file-view';
+  if (currentFile) { renderFile(currentFile.content); }
+  else { host.innerHTML = '<div class="placeholder">编辑器加载中或不可用（回退行号视图），点击左侧文件仍可查看</div>'; }
+}
+
+function ensureMonaco() {
+  if (window.monaco) { initEditor(); return; }
+  if (window.require && typeof window.require === 'function' && !monacoTimedOut) {
+    // 8 秒超时兜底：CDN 过慢则回退行号视图，避免中间栏空白
+    setTimeout(function () {
+      if (!window.monaco && !editorInited) { monacoTimedOut = true; fallbackEditor(); }
+    }, 8000);
+    try {
+      require(['vs/editor/editor.main'], function () { initEditor(); });
+    } catch (e) {
+      if (!editorInited) fallbackEditor();
+    }
+    return;
+  }
+  if (!editorInited) fallbackEditor();
+}
+
 function buildEditor() {
   document.getElementById('pane-center').innerHTML = `
     <div id="file-header">
       <span id="file-tab">—</span>
     </div>
     <div id="editor-host"><div class="placeholder">点击左侧文件树查看代码</div></div>`;
-  ensureMonaco(function () {
-    if (window.monaco) {
-      const host = document.getElementById('editor-host');
-      host.className = '';
-      editor = monaco.editor.create(host, {
-        value: currentFile ? currentFile.content : '',
-        language: currentFile ? langOf(currentFile.name) : 'plaintext',
-        theme: 'vs',
-        automaticLayout: true,
-        fontSize: 13,
-        minimap: { enabled: false },
-      });
-    } else {
-      const host = document.getElementById('editor-host');
-      host.className = 'file-view';
-      if (currentFile) { renderFile(currentFile.content); }
-      else { host.innerHTML = ''; }
-    }
-  });
-}
-
-function ensureMonaco(cb) {
-  if (window.monaco) { cb(); return; }
-  if (window.require) {
-    require(['vs/editor/editor.main'], function () { cb(); });
-  } else {
-    cb();
-  }
+  ensureMonaco();
 }
 
 function langOf(name) {
@@ -544,8 +576,12 @@ async function loadFile(name) {
       currentFile = { name: data.name, content: data.content };
       if (tab) { tab.textContent = data.name; tab.style.display = ''; }
       if (editor) {
-        editor.setValue(data.content);
-        monaco.editor.setModelLanguage(editor.getModel(), langOf(data.name));
+        try {
+          editor.setValue(data.content);
+          monaco.editor.setModelLanguage(editor.getModel(), langOf(data.name));
+        } catch (e) {
+          editor.setValue(data.content);
+        }
       } else {
         renderFile(data.content);
       }
