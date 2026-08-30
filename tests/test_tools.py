@@ -8,7 +8,7 @@ from agent.tools import TOOLS, dispatch, tool_schemas
 from agent.tools.shell_tools import _decode, is_dangerous
 
 
-def test_seven_tools_registered():
+def test_eight_tools_registered():
     names = {t.name for t in TOOLS}
     assert names == {
         "read_file",
@@ -18,6 +18,7 @@ def test_seven_tools_registered():
         "list_directory",
         "search_content",
         "web_search",
+        "todo_write",
     }
 
 
@@ -199,6 +200,33 @@ def test_web_search_empty_results(tmp_path):
     ):
         out = dispatch("web_search", {"query": "xyz"}, str(tmp_path))
     assert "未找到" in out
+
+
+# ---------- todo_write（迭代 8 · 8.2） ----------
+
+def test_todo_write_snapshot_counts(tmp_path):
+    out = dispatch("todo_write", {"todos": [
+        {"id": "1", "content": "步骤A", "status": "completed"},
+        {"id": "2", "content": "步骤B", "status": "in_progress"},
+        {"id": "3", "content": "步骤C", "status": "pending"},
+    ]}, str(tmp_path))
+    assert "共 3 项" in out and "完成 1" in out and "进行中 1" in out and "待办 1" in out
+
+
+def test_todo_write_rejects_non_list(tmp_path):
+    out = dispatch("todo_write", {"todos": "not a list"}, str(tmp_path))
+    assert "todos 应为列表" in out
+
+
+def test_todo_write_caps_items(tmp_path):
+    todos = [{"id": str(i), "content": "x", "status": "pending"} for i in range(31)]
+    out = dispatch("todo_write", {"todos": todos}, str(tmp_path))
+    assert "任务项过多" in out
+
+
+def test_todo_write_normalizes_status(tmp_path):
+    out = dispatch("todo_write", {"todos": [{"id": "1", "content": "x", "status": "奇怪"}]}, str(tmp_path))
+    assert "共 1 项" in out  # 非法状态回退 pending，不报错
 
 
 def test_web_search_parses_lite_layout(tmp_path):

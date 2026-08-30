@@ -9,6 +9,7 @@ from .file_tools import EDIT_FILE, READ_FILE, WRITE_FILE
 from .fs_tools import LIST_DIRECTORY, SEARCH_CONTENT
 from .search_tools import WEB_SEARCH
 from .shell_tools import EXECUTE_COMMAND
+from .todo_tools import TODO_WRITE
 
 TOOLS: list[Tool] = [
     READ_FILE,
@@ -18,6 +19,7 @@ TOOLS: list[Tool] = [
     LIST_DIRECTORY,
     SEARCH_CONTENT,
     WEB_SEARCH,
+    TODO_WRITE,
 ]
 
 

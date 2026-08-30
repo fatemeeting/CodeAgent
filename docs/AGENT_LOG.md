@@ -768,3 +768,18 @@
   - 冒烟标记（parseCommand/flashHint/`goal=1` 拼接）就位；`node --check` 通过
   - Node DOM 垫片：`/goal 任务` → URL 带 goal=1 且用户消息去前缀；空 `/goal` → 不发请求 + 占位符提示；普通文本不带 goal=1 → **JSFLOW /goal 命令 OK**
 - **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
+
+## 迭代 8 切片 8.2：todo 任务清单（todo_write 工具 + 进度 UI）
+
+- **时间**：2026-08-30
+- **给 Agent 的任务**：切片 8.2——todo_write 工具 + todo 事件 + 前端清单块
+- **Agent 修改了什么**：
+  - 新建 `agent/tools/todo_tools.py`：`todo_write`（全量覆盖 `[{id, content, status}]`；status 校验非法回退 pending；≤30 项；内容 100 字截断；返回「共 N 项（完成/进行中/待办）」确认）
+  - `agent/tools/__init__.py`：注册（8 工具）；`agent/loop.py`：SYSTEM_PROMPT 提及；todo_write 执行成功后发 `todo` 事件（快照，todos 列表规范化）
+  - `agent/web.py`：`handleEvent` 的 `todo` 分支——「📋 任务清单」折叠块（☑ 完成 / ▶ 进行中 / ☐ 待办 行 + `完成/总数` meta），`t.todoBlk` 原位更新不重复建块；`.tblk.todo` 纳入代码卡片正文样式；随 trace 持久化重放可见
+  - 测试：`test_tools.py` +4（快照计数/非列表/上限/状态归一化）、`test_loop.py` +1（todo 事件快照）
+- **检查证据**：
+  - `pytest -q` → **117 passed**（112 + 5）
+  - 冒烟标记（`case 'todo'`/`t.todoBlk`/`.tblk.todo .tblk-body` 等）就位；`node --check` 通过
+  - Node DOM 垫片：todo 块标题/`0/2` meta/▶☐ 行、第二次事件原位更新为 `1/1` + ☑、buildChat 重放清单块 → **JSFLOW 8.2 todo OK**
+- **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）

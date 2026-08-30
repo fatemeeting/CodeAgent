@@ -17,6 +17,7 @@ from .tools.shell_tools import is_dangerous
 SYSTEM_PROMPT = (
     "你是一个编程智能体（coding agent）。用户会给你一个编程任务。"
     "你可以使用工具读写文件、执行命令、列目录、搜索文件内容与网络信息（web_search），逐步完成任务。"
+    "复杂多步任务可以使用 todo_write 工具维护任务清单并随进度更新。"
     "每次只执行一步，观察结果后再决定下一步。"
     "任务完成后直接给出简洁的最终总结，不要再调用工具。"
     "重要规则：写入代码文件的内容必须是纯代码，符合该语言的代码规范、可直接运行；"
@@ -272,6 +273,19 @@ def run_turn(
                     duration_ms=durations.get(i, 0),
                     exit_code=exit_code,
                 ))
+                # todo_write 成功后发清单快照事件
+                if tc.name == "todo_write" and not full_obs.startswith("错误"):
+                    todos = tc.arguments.get("todos") if isinstance(tc.arguments, dict) else None
+                    if isinstance(todos, list):
+                        emit(_event("todo", todos=[
+                            {
+                                "id": str(t.get("id", "")),
+                                "content": str(t.get("content", "")),
+                                "status": str(t.get("status", "pending")),
+                            }
+                            for t in todos
+                            if isinstance(t, dict)
+                        ]))
             else:
                 _log_observation(observation)
             messages.append({"role": "tool", "tool_call_id": tc.id, "content": observation})

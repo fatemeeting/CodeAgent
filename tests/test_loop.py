@@ -506,3 +506,24 @@ def test_goal_stalls_after_three_rounds():
     blocked = [e for e in events if e["type"] == "goal_blocked"]
     assert blocked and "无进展" in blocked[0]["reason"]
     assert client.chat.call_count == 3  # 3 轮无进展即止
+
+
+def test_run_emits_todo_snapshot_event(tmp_path):
+    """todo_write 成功后发 todo 事件（清单快照）。"""
+    call = _tool_call("c1", "todo_write", '{"todos": [{"id": "1", "content": "步骤A", "status": "in_progress"}]}')
+    responses = [_response(content=None, tool_calls=[call]), _response(content="完成")]
+    client = mock.Mock()
+
+    def chat_stream(messages, tools=None, on_content=None, on_reasoning=None, on_retry=None):
+        resp = responses.pop(0)
+        if on_content and resp.choices[0].message.content:
+            on_content(resp.choices[0].message.content)
+        return resp
+
+    client.chat_stream.side_effect = chat_stream
+    events = []
+    with mock.patch("agent.loop.LLMClient", return_value=client):
+        run(_stream_config(), "任务", workdir=str(tmp_path), emit=events.append)
+    todo_evs = [e for e in events if e["type"] == "todo"]
+    assert len(todo_evs) == 1
+    assert todo_evs[0]["todos"] == [{"id": "1", "content": "步骤A", "status": "in_progress"}]

@@ -124,7 +124,7 @@ INDEX_HTML = """<!DOCTYPE html>
   @keyframes tblk-sweep { 0% { left: -300px; } 90%, 100% { left: 100%; } }
   @media (prefers-reduced-motion: reduce) { .tblk.running .tblk-head::after { display: none; animation: none; } }
   /* 展开正文：tool/note/err = 代码卡片；think = 标题下缩进文本 */
-  .tblk.tool .tblk-body, .tblk.note .tblk-body, .tblk.err .tblk-body { display: none; margin: 4px 0 4px 4px; padding: 12px 16px; max-height: 260px; overflow: auto; border: 1px solid rgba(0, 0, 0, 0.04); border-radius: 12px; background: #f9fafb; color: var(--text); font-family: Consolas, monospace; font-size: 12.5px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+  .tblk.tool .tblk-body, .tblk.note .tblk-body, .tblk.err .tblk-body, .tblk.todo .tblk-body { display: none; margin: 4px 0 4px 4px; padding: 12px 16px; max-height: 260px; overflow: auto; border: 1px solid rgba(0, 0, 0, 0.04); border-radius: 12px; background: #f9fafb; color: var(--text); font-family: Consolas, monospace; font-size: 12.5px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
   .tblk.think .tblk-body { display: none; padding: 4px 0 4px 22px; max-height: 260px; overflow: auto; color: var(--muted); font-size: 13px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
   .tblk.tool.ok .tblk-meta { color: var(--tblk-ok); }
   .tblk.tool.err .tblk-meta, .tblk.err .tblk-title, .tblk.err .tblk-icon { color: var(--tblk-err); }
@@ -694,6 +694,7 @@ function newTurnState(bubble, traceEl) {
     think: null, pendingTools: [], traceEvents: [],
     steps: 0, toolMs: 0, statsEl: null,
     statusEl: null, connErr: false, done: false,
+    todoBlk: null,
   };
 }
 
@@ -826,6 +827,22 @@ function handleEvent(ev, t) {
         ev.status === 'blocked' ? 'err' : 'done'
       );
       break;
+    case 'todo': {
+      const items = Array.isArray(ev.todos) ? ev.todos : [];
+      const done = items.filter(function (x) { return x.status === 'completed'; }).length;
+      if (!t.todoBlk) {
+        t.todoBlk = createTblk(t.traceEl, 'todo');
+        t.todoBlk.icon = t.todoBlk.head.children[0];
+        t.todoBlk.icon.textContent = '📋';
+        t.todoBlk.title.textContent = '任务清单';
+      }
+      t.todoBlk.meta.textContent = done + '/' + items.length;
+      t.todoBlk.body.textContent = items.map(function (x) {
+        const mark = x.status === 'completed' ? '☑' : (x.status === 'in_progress' ? '▶' : '☐');
+        return mark + ' ' + x.content;
+      }).join('\\n');
+      break;
+    }
     case 'turn_end': {
       if (ev.interrupted) {
         const ib = createTblk(t.traceEl, 'warn');

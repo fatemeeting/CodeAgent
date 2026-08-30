@@ -1,17 +1,16 @@
 # context-pack.md — 当前阶段上下文包
 
-> 当前阶段：**迭代 8 · 切片 8.1（goal 模式：长目标续跑 + 受阻检测 + 状态持久化 + 恢复注入）**
+> 当前阶段：**迭代 8 · 切片 8.2（todo 任务清单：todo_write 工具 + todo 事件 + 进度 UI）**
 
 ## 当前阶段目标
 
-goal 模式（`DEEPSEEK_GOAL=1` / CLI `--goal` / Web 目标模式）：模型无工具回复若不以「完成」开头 → 注入续跑提示自动继续；以「受阻：原因」开头 → blocked；连续 3 轮续跑无进展 → blocked；事件 `goal_start / goal_progress / goal_blocked / goal_end{status}`；goal 状态（status + 摘要）持久化到会话（`SessionStore.update_goal`）；恢复 open 状态会话时注入中断上下文（先验证副作用、只重试幂等操作）；前端受阻 warn 块 + 状态指示。goal 与 reflect 互斥（goal 优先）。
+新增 `todo_write` 工具（模型维护全量清单 `[{id, content, status}]`，status ∈ pending/in_progress/completed，≤30 项、内容 100 字截断，返回简短确认）；loop 在清单更新且执行成功时发 `todo` 事件（全量快照）；前端轨迹区渲染「📋 任务清单」块（☑/▶/☐ 状态行 + `完成/总数` meta，后续事件原位更新不重复建块）；清单随 trace 持久化重放可见；SYSTEM_PROMPT 提及。
 
 ## 必须读
 
-- `SPEC.md` 第 27 节切片 8.1
-- `agent/loop.py`（`run`/`run_turn` 无工具分支与事件点）、`agent/config.py`、`agent/cli.py`（flag 注册）
-- `agent/sessions.py`（CRUD 与 `_write_session`）、`agent/web.py`（`_handle_events` worker 与 `handleEvent`）
-- `tests/test_loop.py`、`tests/test_sessions.py`、`tests/test_web.py`
+- `SPEC.md` 第 27 节切片 8.2
+- `agent/tools/__init__.py`（注册）、`agent/loop.py`（观测回填循环与事件点）、`agent/web.py`（`handleEvent`/`newTurnState`/`.tblk` CSS）
+- `tests/test_tools.py`、`tests/test_loop.py`
 
 ## 不得读 / 不得改
 
@@ -19,5 +18,5 @@ goal 模式（`DEEPSEEK_GOAL=1` / CLI `--goal` / Web 目标模式）：模型无
 
 ## 输出要求
 
-- 产出：`agent/loop.py`、`agent/config.py`、`agent/cli.py`、`agent/sessions.py`、`agent/web.py`、`.env.example`、测试
-- 验收：`pytest -q` 全绿（约 112）；DOM 垫片（blocked 块/状态）；CLI `--goal` 回归；真实 goal 冒烟（可选）
+- 产出：`agent/tools/todo_tools.py`、`agent/tools/__init__.py`、`agent/loop.py`、`agent/web.py`、测试
+- 验收：`pytest -q` 全绿（约 117）；`node --check`；DOM 垫片（清单块/原位更新/重放）；冒烟标记
