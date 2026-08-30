@@ -452,3 +452,57 @@ def test_run_truncates_long_history():
     contents = [m.get("content", "") for m in messages]
     assert "现在的问题" in contents  # 本轮任务始终在
     assert len(messages) < len(history) + 2  # 发生截断
+
+
+# ---------- goal 模式（迭代 8 · 8.1） ----------
+
+def _goal_config(max_iterations=8):
+    return Config(
+        api_key="k",
+        base_url="https://example.com",
+        model="deepseek-chat",
+        max_iterations=max_iterations,
+        goal=True,
+    )
+
+
+def test_goal_auto_continues_until_done():
+    responses = [_response(content="我先试试"), _response(content="完成：任务已完成")]
+    client = mock.Mock()
+    client.chat.side_effect = responses
+    events = []
+    with mock.patch("agent.loop.LLMClient", return_value=client):
+        out = run(_goal_config(), "目标", workdir=".", emit=events.append)
+    assert out == "完成：任务已完成"
+    assert client.chat.call_count == 2  # 非完成信号自动续跑
+    second = client.chat.call_args_list[1].args[0]
+    assert any(
+        m.get("role") == "user" and "请继续使用工具推进" in m.get("content", "")
+        for m in second
+    )
+    types = [e["type"] for e in events]
+    assert "goal_start" in types and "goal_progress" in types and "goal_end" in types
+
+
+def test_goal_blocked_by_prefix():
+    responses = [_response(content="受阻：缺少必要信息")]
+    client = mock.Mock()
+    client.chat.side_effect = responses
+    events = []
+    with mock.patch("agent.loop.LLMClient", return_value=client):
+        out = run(_goal_config(), "目标", workdir=".", emit=events.append)
+    assert out == "受阻：缺少必要信息"
+    goal_types = [e["type"] for e in events if e["type"].startswith("goal")]
+    assert goal_types == ["goal_start", "goal_blocked", "goal_end"]
+
+
+def test_goal_stalls_after_three_rounds():
+    responses = [_response(content="还在尝试")] * 5
+    client = mock.Mock()
+    client.chat.side_effect = responses
+    events = []
+    with mock.patch("agent.loop.LLMClient", return_value=client):
+        run(_goal_config(), "目标", workdir=".", emit=events.append)
+    blocked = [e for e in events if e["type"] == "goal_blocked"]
+    assert blocked and "无进展" in blocked[0]["reason"]
+    assert client.chat.call_count == 3  # 3 轮无进展即止

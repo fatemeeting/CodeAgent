@@ -237,9 +237,10 @@
 
 ## AI. 迭代 8 切片 8.1 goal 模式
 
-- [ ] AI1 长目标续跑 + 显式 DONE + 连续 N 轮无进展 blocked 事件
-- [ ] AI2 goal 状态持久化 + 恢复注入中断上下文（幂等重试指引）
-- [ ] AI3 前端目标徽章；测试（完成/受阻/恢复注入）；CLI 回归
+- [x] AI1 长目标续跑 + 显式 DONE（「完成」开头）/「受阻：」终止 + 连续 3 轮无进展 blocked 事件；goal 与 reflect 互斥（goal 优先）
+- [x] AI2 goal 状态持久化（`SessionStore.update_goal`）+ 恢复 open 会话注入中断上下文（先验证副作用、只重试幂等操作）
+- [x] AI3 前端受阻 warn 块 + 状态指示（目标执行中…/推进中…/受阻）；测试（完成/受阻/停滞 ×3 + 恢复注入 + 持久化）；CLI `--goal` + `.env.example`
+- [x] AI4 `/goal` 斜杠命令：前端解析 `/goal <任务>` 按次开启 goal 模式（`goal=1` 参数）；空命令占位符提示；goal 持久化仅在 goal 模式/恢复 open 会话时写入
 
 ## AJ. 迭代 8 切片 8.2 todo 任务清单
 

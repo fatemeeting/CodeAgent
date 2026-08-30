@@ -56,6 +56,7 @@ class Config:
     stream: bool = False  # 流式输出最终答复
     confirm_dangerous: bool = False  # 危险命令执行前人工确认（human-in-the-loop）
     think: bool = False  # 开启思考：主模型切换 deepseek-reasoner（显式 DEEPSEEK_MODEL 优先）
+    goal: bool = False  # 目标模式：长目标自动续跑（非「完成」开头不终止）
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -80,4 +81,5 @@ class Config:
             confirm_dangerous=os.environ.get("DEEPSEEK_CONFIRM_DANGEROUS", "").lower()
             in ("1", "true", "yes"),
             think=think,
+            goal=os.environ.get("DEEPSEEK_GOAL", "").lower() in ("1", "true", "yes"),
         )

@@ -476,3 +476,81 @@ def test_web_sessions_filter_by_workspace(tmp_path):
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_web_sse_goal_resume_and_persist(tmp_path):
+    """goal 恢复注入：open 状态会话注入中断上下文；运行后状态持久化。"""
+    server = ThreadingHTTPServer(("127.0.0.1", 0), AgentHandler)
+    server.config = _config()
+    server.workdir = "."
+    server.sessions = SessionStore(tmp_path / "data" / "sessions")
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = server.server_address[1]
+    s = server.sessions.create_session(str(tmp_path), "g")
+    server.sessions.update_goal(s["id"], {"status": "open", "summary": "旧摘要"})
+    client = mock.Mock()
+    captured = {}
+
+    def chat_stream(messages, tools=None, on_content=None, on_reasoning=None, on_retry=None):
+        captured["messages"] = [dict(m) for m in messages]
+        if on_content:
+            on_content("完成：搞定")
+        return _response("完成：搞定")
+
+    client.chat_stream = mock.Mock(side_effect=chat_stream)
+    try:
+        with mock.patch("agent.web.LLMClient", return_value=client):
+            url = (
+                f"http://127.0.0.1:{port}/events?task="
+                + urllib.parse.quote("继续目标")
+                + "&session="
+                + s["id"]
+            )
+            with urllib.request.urlopen(url) as resp:
+                raw = resp.read().decode("utf-8")
+    finally:
+        server.shutdown()
+        server.server_close()
+    last_user = next(
+        (m for m in reversed(captured["messages"]) if m["role"] == "user"), None
+    )
+    assert last_user and "此前目标未完成" in last_user["content"]
+    assert "旧摘要" in last_user["content"]
+    goal = server.sessions.get_session(s["id"])["goal"]
+    assert goal["status"] == "done" and goal["summary"] == "完成：搞定"
+    assert "[DONE]" in raw
+
+
+def test_web_sse_goal_param_enables_goal_mode(tmp_path):
+    """?goal=1 按次开启 goal 模式（goal_start/goal_end 事件出现）。"""
+    server = ThreadingHTTPServer(("127.0.0.1", 0), AgentHandler)
+    server.config = _config()
+    server.workdir = "."
+    server.sessions = SessionStore(tmp_path / "data" / "sessions")
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = server.server_address[1]
+    client = mock.Mock()
+
+    def chat_stream(messages, tools=None, on_content=None, on_reasoning=None, on_retry=None):
+        if on_content:
+            on_content("完成：搞定")
+        return _response("完成：搞定")
+
+    client.chat_stream = mock.Mock(side_effect=chat_stream)
+    try:
+        with mock.patch("agent.web.LLMClient", return_value=client):
+            with urllib.request.urlopen(
+                f"http://127.0.0.1:{port}/events?task=" + urllib.parse.quote("目标") + "&goal=1"
+            ) as resp:
+                raw = resp.read().decode("utf-8")
+            with urllib.request.urlopen(
+                f"http://127.0.0.1:{port}/events?task=" + urllib.parse.quote("普通")
+            ) as resp:
+                raw2 = resp.read().decode("utf-8")
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert '"type": "goal_start"' in raw and '"type": "goal_end"' in raw
+    assert '"type": "goal_start"' not in raw2  # 无 goal 参数不开启

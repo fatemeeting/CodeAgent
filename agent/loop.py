@@ -31,6 +31,13 @@ REFLECT_PROMPT = (
 
 MAX_TOOL_TEXT = 4000  # 单条工具观测回填给模型前的截断上限，避免上下文膨胀
 
+GOAL_DONE_PREFIX = "完成"  # goal 模式：以此开头的纯文本答复视为完成信号
+GOAL_BLOCKED_PREFIX = "受阻"  # goal 模式：以此开头的纯文本答复视为受阻终止
+GOAL_MAX_STALL = 3  # goal 模式：连续无进展轮数上限
+GOAL_CONTINUE_PROMPT = (
+    "任务尚未完成，请继续使用工具推进；若确实无法继续，请以「受阻：原因」开头说明。"
+)
+
 
 def _brief(text: Any, limit: int) -> str:
     """把文本压成单行简短摘要，超出限制用省略号截断。"""
@@ -119,6 +126,7 @@ def run_turn(
     """
     reflected = False
     pending_final: str | None = None
+    stall = 0  # goal 模式：连续无进展轮数
     for step in range(1, config.max_iterations + 1):
         messages[:] = truncate_history(messages, config.max_context_tokens)
         think_started = False
@@ -160,8 +168,34 @@ def run_turn(
                 emit(_event("content_delta", text=parsed.content))
             emit(_event("round_end", has_tools=bool(parsed.tool_calls)))
 
-        # 终止条件 1：模型未请求工具，视为最终答复
+        # 终止条件 1：模型未请求工具，视为最终答复（goal 模式另走自动续跑语义）
         if not parsed.tool_calls:
+            if config.goal:
+                text = parsed.content or ""
+                if text.strip().startswith(GOAL_BLOCKED_PREFIX):
+                    if emit:
+                        emit(_event("goal_blocked", reason=text))
+                        emit(_event("goal_end", status="blocked"))
+                    messages.append({"role": "assistant", "content": parsed.content or ""})
+                    return text
+                if not text.strip().startswith(GOAL_DONE_PREFIX):
+                    stall += 1
+                    if stall >= GOAL_MAX_STALL:
+                        if emit:
+                            emit(_event("goal_blocked", reason="连续多轮无进展"))
+                            emit(_event("goal_end", status="blocked"))
+                        messages.append({"role": "assistant", "content": text})
+                        return text
+                    messages.append({"role": "assistant", "content": text})
+                    messages.append({"role": "user", "content": GOAL_CONTINUE_PROMPT})
+                    if emit:
+                        emit(_event("goal_progress", rounds=step))
+                    continue
+                stall = 0
+                if emit:
+                    emit(_event("goal_end", status="done"))
+                messages.append({"role": "assistant", "content": text})
+                return text
             if config.reflect and not reflected:
                 # 反思：首次给出答复后注入自检提示（仅一轮）
                 reflected = True
@@ -241,10 +275,14 @@ def run_turn(
             else:
                 _log_observation(observation)
             messages.append({"role": "tool", "tool_call_id": tc.id, "content": observation})
+        stall = 0  # 有工具推进的轮次视为有进展
 
     # 终止条件 2：达到最大迭代上限
     final = f"（达到最大迭代次数 {config.max_iterations}，任务未完成）"
     if emit:
+        if config.goal:
+            emit(_event("goal_blocked", reason=final))
+            emit(_event("goal_end", status="blocked"))
         emit(_event("error", severity="warn", message=final, text=final))
     elif config.stream:
         print(final)  # 流式模式下该消息非模型输出，需自行打印
@@ -269,6 +307,8 @@ def run(
         client = LLMClient(config)
     if emit:
         emit(_event("turn_start", task=task))
+        if config.goal:
+            emit(_event("goal_start"))
     messages: list[dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT}]
     if history:
         messages.extend(history)

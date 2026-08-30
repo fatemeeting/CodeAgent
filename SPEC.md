@@ -223,3 +223,8 @@ coding-agent/
 5. **切片 8.4 上下文压缩**：历史超 `max_context_tokens` 时先 LLM 总结旧轮次为摘要（system 后插入）再按预算保留最近消息（替代直接丢弃）；`compact` 事件（压缩前后 token 数）；前端「上下文压缩」折叠块；仅 Web 会话历史启用；压缩失败回退旧截断逻辑。
 6. **切片 8.5 集成回归**：真实冒烟 ×3~4（goal 完成/受阻、复合 todo+subagent、web_search）；全量回归；证据入 AGENT_LOG 放行。
 7. **降级路径**：goal 无进展检测降级为轮数上限；subagent 预算 3 轮失败不重试；compaction 阈值 ≥80% 预算才触发。
+
+## 28. 迭代 8 · 切片 8.1 补充（/goal 斜杠命令）
+
+1. **对话输入命令**：输入 `/goal <任务>` 时本回合进入目标模式（任务文本去掉前缀，EventSource 带 `goal=1`）；仅输入 `/goal` 时占位符闪烁用法提示；`/plan`、`/chat` 命令后续切片实现。
+2. **后端**：`/events` 解析 `goal` 查询参数 → `dataclasses.replace(config, stream=True, goal=True)` 按次生效；goal 状态持久化仅在 goal 模式或恢复 open 会话时写入（避免普通对话覆盖已完成的 goal 状态）。

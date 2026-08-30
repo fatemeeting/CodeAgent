@@ -738,3 +738,33 @@
   - `pytest -q` → **105 passed**（98 + 7 新增）
   - 真实外网冒烟：`web_search("python programming")` → 解析出 python.org 与 W3Schools 结果（标题/URL/摘要齐全）→ **REAL SEARCH: OK**
 - **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
+
+## 迭代 8 切片 8.1：goal 模式（长目标续跑 + 受阻检测 + 状态持久化 + 恢复注入）
+
+- **时间**：2026-08-30
+- **给 Agent 的任务**：切片 8.1——goal 模式：长目标自动续跑、受阻检测、goal 状态持久化、恢复注入中断上下文
+- **Agent 修改了什么**：
+  - `agent/loop.py`：goal 语义——无工具答复以「完成」开头视为完成（`goal_end{done}`）；「受阻：」开头 → `goal_blocked + goal_end{blocked}`；否则注入续跑提示（`GOAL_CONTINUE_PROMPT`）自动继续并计 stall，连续 3 轮无进展 → blocked；有工具推进的轮次重置 stall；迭代上限在 goal 模式额外发 blocked/end；goal 与 reflect 互斥（goal 优先）；事件 `goal_start/goal_progress/goal_blocked/goal_end`
+  - `agent/config.py`：`goal` 开关（`DEEPSEEK_GOAL`）；`agent/cli.py`：`--goal`；`.env.example` 同步
+  - `agent/sessions.py`：`update_goal(session_id, goal)`（status+summary 持久化）
+  - `agent/web.py`：worker 运行后按答复信号把 goal 状态写入会话（open/done/blocked + 200 字摘要）；恢复 open 状态会话时向任务注入「此前目标未完成…先验证副作用、只重试幂等操作」中断上下文；前端 goal 事件（状态指示 目标执行中…/推进中…/受阻 + 琥珀「目标受阻」warn 块）
+  - 测试：`test_config.py` +1、`test_sessions.py` +1、`test_loop.py` +3（自动续跑/受阻前缀/3 轮停滞）、`test_web.py` +1（恢复注入 + 状态持久化端到端）
+- **检查证据**：
+  - `pytest -q` → **111 passed**（105 + 6 新增）
+  - `compileall` EXIT=0；`--help` 含 `--goal`；冒烟标记（goal 事件/恢复注入/update_goal）就位；`node --check` 通过
+  - Node DOM 垫片：goal_start/progress 状态流转、blocked → 琥珀「目标受阻」块 + 状态「受阻」、goal_end 受阻态样式 → **JSFLOW 8.1 goal OK**
+- **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
+
+## 迭代 8 切片 8.1 补充：/goal 斜杠命令
+
+- **时间**：2026-08-30
+- **给 Agent 的任务**（用户反馈）：对话输入 `/goal` 进入 goal 状态（/plan、/chat 后续实现）
+- **Agent 修改了什么**：
+  - `agent/web.py` 前端：`parseCommand` 解析 `/goal <任务>`（任务去前缀）；`sendTask` 在 goal 命令时给 `/events` 附加 `&goal=1`；仅输入 `/goal` 时占位符闪烁用法提示（`flashHint`，3 秒复原）不发请求；`/plan`、`/chat` 暂不特殊处理（后续切片）
+  - `agent/web.py` 后端：`/events` 解析 `goal` 查询参数 → `dataclasses.replace(config, stream=True, goal=goal_mode)` **按次**开启 goal；goal 状态持久化条件收窄为「goal 模式或恢复 open 会话」——避免普通对话覆盖已完成的 goal 状态
+  - `tests/test_web.py`：+1（`?goal=1` 事件流出现 goal_start/goal_end、无参数不出现）
+- **检查证据**：
+  - `pytest -q` → **112 passed**（111 + 1）
+  - 冒烟标记（parseCommand/flashHint/`goal=1` 拼接）就位；`node --check` 通过
+  - Node DOM 垫片：`/goal 任务` → URL 带 goal=1 且用户消息去前缀；空 `/goal` → 不发请求 + 占位符提示；普通文本不带 goal=1 → **JSFLOW /goal 命令 OK**
+- **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）

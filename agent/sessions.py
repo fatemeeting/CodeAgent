@@ -211,3 +211,15 @@ class SessionStore:
             self._write_session(session)
             self._sync_index(session)
             return session
+
+    def update_goal(self, session_id: str, goal: dict[str, Any]) -> dict[str, Any] | None:
+        """更新会话目标状态（status: open/done/blocked + summary），刷新索引。"""
+        with self._lock:
+            session = self.get_session(session_id)
+            if session is None:
+                return None
+            session["goal"] = goal
+            session["updated_at"] = time.time()
+            self._write_session(session)
+            self._sync_index(session)
+            return session

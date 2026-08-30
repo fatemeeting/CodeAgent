@@ -803,6 +803,29 @@ function handleEvent(ev, t) {
       rb.summary.textContent = oneLine(ev.message || '', 60);
       break;
     }
+    case 'goal_start':
+      setStatus(t, '目标执行中…');
+      break;
+    case 'goal_progress':
+      setStatus(t, '推进中…');
+      break;
+    case 'goal_blocked': {
+      const gb = createTblk(t.traceEl, 'warn');
+      gb.head.onclick = null;
+      gb.icon = gb.head.children[0];
+      gb.icon.textContent = '⚠️';
+      gb.title.textContent = '目标受阻';
+      gb.summary.textContent = oneLine(ev.reason || '', 60);
+      setStatus(t, '受阻', 'err');
+      break;
+    }
+    case 'goal_end':
+      setStatus(
+        t,
+        ev.status === 'blocked' ? '受阻' : '完成',
+        ev.status === 'blocked' ? 'err' : 'done'
+      );
+      break;
     case 'turn_end': {
       if (ev.interrupted) {
         const ib = createTblk(t.traceEl, 'warn');
@@ -954,10 +977,31 @@ function renderMarkdown(text) {
   return frag;
 }
 
+/* ---------- 斜杠命令（迭代 8 · 8.1：/goal 目标模式） ---------- */
+function parseCommand(text) {
+  const t = text.trim();
+  if (t === '/goal' || t.startsWith('/goal ')) {
+    const rest = t === '/goal' ? '' : t.slice('/goal'.length).trim();
+    return {cmd: 'goal', task: rest};
+  }
+  return {cmd: '', task: t};
+}
+
+function flashHint(input, text) {
+  const old = input.placeholder;
+  input.placeholder = text;
+  setTimeout(function () { input.placeholder = old; }, 3000);
+}
+
 async function sendTask() {
   const input = document.getElementById('chat-input');
-  const task = input.value.trim();
-  if (!task) return;
+  const parsed = parseCommand(input.value);
+  const task = parsed.task;
+  const goalMode = parsed.cmd === 'goal';
+  if (!task) {
+    if (goalMode) flashHint(input, '/goal 需要跟随任务，例如：/goal 实现用户登录功能');
+    return;
+  }
   input.value = '';
   if (!chatMessages.some(m => m.role === 'user')) firstTask = task;
   chatMessages.push({role: 'user', raw: task});
@@ -967,7 +1011,7 @@ async function sendTask() {
   const idx = chatMessages.length - 1;
   await ensureSession(task);
   saveMessages();
-  const es = new EventSource('/events?task=' + encodeURIComponent(task) + '&workdir=' + encodeURIComponent(state.workspace) + '&session=' + encodeURIComponent(currentSessionId || ''));
+  const es = new EventSource('/events?task=' + encodeURIComponent(task) + '&workdir=' + encodeURIComponent(state.workspace) + '&session=' + encodeURIComponent(currentSessionId || '') + (goalMode ? '&goal=1' : ''));
   const t = newTurnState(agent.bubble, agent.traceEl);
   t.statusEl = agent.status;
   es.onmessage = function (e) {
@@ -1462,6 +1506,7 @@ class AgentHandler(BaseHTTPRequestHandler):
             self.send_error(400, f"工作区不存在：{workdir}")
             return
         session_id = (query.get("session") or [None])[0]
+        goal_mode = (query.get("goal") or ["0"])[0] in ("1", "true")
         session = None
         if session_id:
             try:
@@ -1469,6 +1514,16 @@ class AgentHandler(BaseHTTPRequestHandler):
             except Exception:  # noqa: BLE001 - 会话读取失败按全新会话处理
                 session = None
         history = _history_from_session(session, task)  # 同会话上下文互通
+        # goal 恢复注入：上次目标未完成（open）时提示先验证副作用、只重试幂等操作
+        resume_note = ""
+        if session and (session.get("goal") or {}).get("status") == "open":
+            summary = str((session.get("goal") or {}).get("summary") or "")[:200]
+            resume_note = (
+                "\n\n（此前目标未完成"
+                + (f"，摘要：{summary}" if summary else "")
+                + "。请先验证已完成的工作与副作用，仅重试幂等操作，再继续完成目标。）"
+            )
+        task_effective = task + resume_note
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
         self.send_header("Cache-Control", "no-cache")
@@ -1480,9 +1535,27 @@ class AgentHandler(BaseHTTPRequestHandler):
         def worker() -> None:
             try:
                 with contextlib.redirect_stdout(_NullWriter()):
-                    stream_cfg = dataclasses.replace(config, stream=True)  # Web 恒流式
+                    stream_cfg = dataclasses.replace(config, stream=True, goal=goal_mode)  # Web 恒流式
                     client = LLMClient(stream_cfg)
-                    run(stream_cfg, task, workdir=workdir, client=client, emit=q.put, history=history)
+                    result = run(
+                        stream_cfg, task_effective, workdir=workdir,
+                        client=client, emit=q.put, history=history,
+                    )
+                    # goal 状态持久化（仅在 goal 模式或恢复 open 会话时写入，避免普通对话覆盖）
+                    goal_open = (session or {}).get("goal", {}).get("status") == "open"
+                    if session_id and session is not None and (goal_mode or goal_open):
+                        try:
+                            r = (result or "").strip()
+                            status = "open"
+                            if r.startswith("受阻"):
+                                status = "blocked"
+                            elif r.startswith("完成"):
+                                status = "done"
+                            self._sessions().update_goal(
+                                session_id, {"status": status, "summary": r[:200]}
+                            )
+                        except Exception:  # noqa: BLE001 - 状态持久化失败不影响主流程
+                            pass
             except Exception as exc:  # noqa: BLE001 - 错误推送给前端
                 q.put({"type": "error", "severity": "error", "message": str(exc), "text": f"错误：{exc}"})
             finally:

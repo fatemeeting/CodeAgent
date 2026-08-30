@@ -61,3 +61,11 @@ def test_config_explicit_model_wins_over_think(monkeypatch):
     c = Config.from_env()
     assert c.think is True
     assert c.model == "deepseek-chat"  # 显式模型优先
+
+
+def test_config_goal_switch(monkeypatch):
+    monkeypatch.setattr("agent.config.load_dotenv", lambda *a, **k: None)
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "k")
+    monkeypatch.setenv("DEEPSEEK_GOAL", "1")
+    c = Config.from_env()
+    assert c.goal is True

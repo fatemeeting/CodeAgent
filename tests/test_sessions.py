@@ -85,6 +85,14 @@ def test_get_missing(tmp_path):
     assert _store(tmp_path).get_session("nope") is None
 
 
+def test_update_goal_persists(tmp_path):
+    store = _store(tmp_path)
+    s = store.create_session("E:/demo", "g")
+    store.update_goal(s["id"], {"status": "blocked", "summary": "x"})
+    s2 = store.get_session(s["id"])
+    assert s2["goal"] == {"status": "blocked", "summary": "x"}
+
+
 def test_save_messages_persists(tmp_path):
     store = _store(tmp_path)
     s = store.create_session("E:/demo")

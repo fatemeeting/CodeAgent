@@ -29,6 +29,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--stream", action="store_true", help="最终答复流式输出")
     parser.add_argument("--plan", action="store_true", help="执行前先生成分步计划")
     parser.add_argument("--confirm", action="store_true", help="危险命令执行前人工确认")
+    parser.add_argument("--goal", action="store_true", help="目标模式：长目标自动续跑，受阻或连续无进展才终止")
     return parser
 
 
@@ -42,6 +43,7 @@ def main(argv: list[str] | None = None) -> int:
         or args.reflect
         or args.stream
         or args.confirm
+        or args.goal
     ):
         config = replace(
             config,
@@ -57,6 +59,7 @@ def main(argv: list[str] | None = None) -> int:
             reflect=args.reflect or config.reflect,
             stream=args.stream or config.stream,
             confirm_dangerous=args.confirm or config.confirm_dangerous,
+            goal=args.goal or config.goal,
         )
     if args.task is None:
         return repl(config, workdir=args.workdir or ".")
