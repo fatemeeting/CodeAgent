@@ -926,3 +926,18 @@
   - `node --check` 提取前端脚本 EXIT=0；Node DOM 垫片冒烟 **21/21 PASS**（parseCommand ×4、CMD_ITEMS、skill_loaded 块 ×3、面板渲染与只读标签 ×4、POST/PUT/删除两步确认 ×3、EventSource skill/任务/模式 ×4）
   - 真实服务冒烟（127.0.0.1:8893，临时工作区）：GET 空列表 → POST 新建 → 非法名 `../evil` 拒绝 → PUT 更新 → GET 列表 source=workspace → 磁盘文件为 UTF-8 无 BOM（前 3 字节 2D 2D 2D，中文完好）→ DELETE 成功 → 二次 DELETE 拒绝 → 列表回空；curl UTF-8 文件体复验中文往返无乱码
 - **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
+
+## 迭代 9 切片 9.4：内置技能
+
+- **时间**：2026-08-30
+- **给 Agent 的任务**：切片 9.4——三个内置技能（python-testing / code-review / web-frontend）+ 显式装载冒烟（不自动匹配）
+- **Agent 修改了什么**：
+  - 新建 `skills/python-testing/SKILL.md`（pytest 规范：先测后写、AAA、主路径/边界/错误路径/回归覆盖、mock LLM 免 key、tmp_path）、`skills/code-review/SKILL.md`（红线核对/最小 diff/契约一致/结论四要素入 AGENT_LOG；modes: agent, chat）、`skills/web-frontend/SKILL.md`（textContent 防 XSS、CSS 变量、SSE [DONE] 与断线 close、node --check + 无头垫片验收）——均为 builtin 只读、正文远低于 4000 字
+  - **真 bug 修复**：真实 CLI 冒烟在 PowerShell 管道下崩溃——`_log_observation` 打印 `↳`（\u21b3）时 GBK 编码失败（控制台直连不触发，管道重定向触发）→ `cli.main` 入口 `_harden_stdio()`（`reconfigure(errors="replace")`，保留编码、控制台行为不变）；`agent.web main` 同步加固；回归测试 `test_cli_harden_stdio_replaces_unencodable`
+  - 断言更新：`test_web_skills_crud`（初始列表含 3 个内置且 source=builtin、DELETE 内置拒绝、终态内置保留）、`test_skills.py` 新增 `test_load_skills_includes_builtin`（内置可见 + 关键词解析 + 正文限长 + match_skills 预留仅验证不接入）
+- **检查证据**：
+  - `pytest -q` → **146 passed**（144 + 2）；`compileall` EXIT=0
+  - CLI `--list-skills`（免 key，强制 UTF-8 stdout 复验）：3 个内置技能中文完好（`python-testing（内置）— Python 单元测试规范（pytest）…`）
+  - 真实冒烟 ×2：① CLI `--skill python-testing` 只读分析任务——答复完整体现规范（AAA 结构、`pytest.raises`、None 边界、非字符串类型、路径穿越回归、并定位到 `tests/test_skills.py:141-151` 的差距），未写任何文件；② Web `/events?skill=python-testing`——70 帧、`skill_loaded {name: python-testing}` 帧、流式答复体现规范（先写失败用例、主路径/边界/错误路径、mock 外部 API、tmp_path、pytest -q 全绿收尾）、`[DONE]` 正常收尾
+  - 未指定技能不自动装载：单元测试 `test_run_skills`（未指定 → system 无「已装载技能」）继续全绿
+- **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）

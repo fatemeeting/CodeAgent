@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from dataclasses import replace
 
 from .config import Config
@@ -11,6 +12,15 @@ from .loop import run
 from .plan import make_plan
 from .repl import repl
 from .suggest import suggest_followups
+
+
+def _harden_stdio() -> None:
+    """stdout/stderr 编码容错：管道重定向下遇 GBK 不可编码字符（如 ↳）不再崩溃。"""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="replace")
+        except (AttributeError, ValueError):
+            pass  # 旧 Python / 不支持 reconfigure 时保持原行为
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -36,6 +46,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    _harden_stdio()
     args = build_parser().parse_args(argv)
     if args.list_skills:
         from .skills import load_skills, skill_summary

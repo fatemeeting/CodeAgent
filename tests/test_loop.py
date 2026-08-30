@@ -665,3 +665,19 @@ def test_run_emits_skill_loaded():
     loaded = [e for e in events if e["type"] == "skill_loaded"]
     assert len(loaded) == 1
     assert loaded[0]["name"] == "demo" and loaded[0]["description"] == "演示技能"
+
+
+def test_cli_harden_stdio_replaces_unencodable(monkeypatch):
+    """管道重定向下 GBK 不可编码字符（如 ↳）不再崩溃（errors=replace）。"""
+    import io
+    import sys
+
+    from agent import cli
+
+    raw = io.BytesIO()
+    wrapper = io.TextIOWrapper(raw, encoding="gbk", errors="strict")
+    monkeypatch.setattr(sys, "stdout", wrapper)
+    cli._harden_stdio()
+    print("↳ 观测")  # 修复前抛 UnicodeEncodeError
+    wrapper.flush()
+    assert "?" in raw.getvalue().decode("gbk")  # 被替换为 ?，而不是崩溃

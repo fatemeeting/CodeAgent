@@ -680,8 +680,16 @@ def test_web_skills_crud(tmp_path):
     thread.start()
     port = server.server_address[1]
     try:
-        # 初始为空列表
-        assert _skill_req(port, "/skills", method="GET") == {"ok": True, "skills": []}
+        # 初始仅内置技能（只读，随发行）
+        listed = _skill_req(port, "/skills", method="GET")
+        names = {s["name"]: s["source"] for s in listed["skills"]}
+        assert names.get("python-testing") == "builtin"
+        assert names.get("code-review") == "builtin"
+        assert names.get("web-frontend") == "builtin"
+        assert "demo" not in names
+        # 内置只读：DELETE 拒绝且文件保留
+        denied = _skill_req(port, "/skills/python-testing", method="DELETE")
+        assert denied["ok"] is False
         # 新建（工作区级）
         created = _skill_req(
             port,
@@ -693,7 +701,8 @@ def test_web_skills_crud(tmp_path):
         assert created["skill"]["source"] == "workspace"
         assert created["skill"]["modes"] == ["agent", "chat"]
         listed = _skill_req(port, "/skills", method="GET")
-        assert [s["name"] for s in listed["skills"]] == ["demo"]
+        by_name = {s["name"]: s["source"] for s in listed["skills"]}
+        assert by_name.get("demo") == "workspace"
         # 重名与非法名（含路径穿越）
         dup = _skill_req(port, "/skills", {"name": "demo", "description": "x"})
         assert dup["ok"] is False and "已存在" in dup["error"]
@@ -711,7 +720,10 @@ def test_web_skills_crud(tmp_path):
         gone = _skill_req(port, f"/skills/demo?workdir={qs}", method="DELETE")
         assert gone["ok"] is True
         assert not md.exists()
-        assert _skill_req(port, "/skills", method="GET") == {"ok": True, "skills": []}
+        final = _skill_req(port, "/skills", method="GET")
+        final_names = {s["name"] for s in final["skills"]}
+        assert "demo" not in final_names
+        assert "python-testing" in final_names  # 内置不受影响
         again = _skill_req(port, "/skills/demo", method="DELETE")
         assert again["ok"] is False
     finally:

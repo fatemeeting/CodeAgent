@@ -296,8 +296,8 @@
 
 ## AR. 迭代 9 切片 9.4 内置技能
 
-- [ ] AR1 内置 python-testing / code-review / web-frontend（SKILL.md + 资源）
-- [ ] AR2 真实冒烟：关键词任务自动装载 + 答复体现规范
+- [x] AR1 内置 python-testing / code-review / web-frontend（SKILL.md + 资源）
+- [x] AR2 真实冒烟：**显式装载**（/skill 命令、CLI --skill、/events?skill）+ 答复体现规范；未指定技能的任务不自动装载
 
 ## AS. 迭代 9 切片 9.5 集成回归
 

@@ -11,6 +11,7 @@ import dataclasses
 import io
 import json
 import queue
+import sys
 import threading
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -2260,6 +2261,11 @@ def serve(config: Config, workdir: str = ".", host: str = "127.0.0.1", port: int
 
 
 def main(argv: list[str] | None = None) -> int:
+    for stream in (sys.stdout, sys.stderr):  # 管道重定向下 GBK 不可编码字符不崩溃
+        try:
+            stream.reconfigure(errors="replace")
+        except (AttributeError, ValueError):
+            pass
     parser = argparse.ArgumentParser(prog="agent.web", description="编程智能体 Web 界面")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8080)

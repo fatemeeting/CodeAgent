@@ -90,6 +90,19 @@ def test_load_skills_merge_priority(monkeypatch, tmp_path):
     assert "only-env" in skills2 and skills2["only-env"].source == "env"
 
 
+def test_load_skills_includes_builtin(tmp_path):
+    """内置技能随发行可见（source=builtin 只读）。"""
+    skills = load_skills(workdir=str(tmp_path))
+    assert skills["python-testing"].source == "builtin"
+    assert skills["code-review"].source == "builtin"
+    assert skills["web-frontend"].source == "builtin"
+    assert "pytest" in skills["python-testing"].keywords
+    assert len(skills["python-testing"].body) <= 4000
+    # 显式装载语义：仅显式传入才注入（match_skills 不接入 run，此处只验预留匹配）
+    matched = match_skills(skills, "请编写 pytest 单元测试", mode="agent")
+    assert "python-testing" in [s.name for s in matched]
+
+
 def test_match_skills_scores_and_caps(tmp_path):
     a = Skill(name="a", description="", keywords=["pytest"], body="A")
     b = Skill(name="b", description="", keywords=["测试"], body="B")
