@@ -414,7 +414,7 @@ async function openSkillsPanel() {
   card.innerHTML = `
     <div class="mgr-card skill-card">
       <div class="mgr-title">📚 技能</div>
-      <div class="mgr-sub">技能仅在你显式指定时装载（/skill <name>）；内置与 SKILLS_DIR 只读，工作区技能可增删改</div>
+      <div class="mgr-sub">技能仅在你显式指定时装载（/skill 多选）；点击技能名累积到输入框；内置与 SKILLS_DIR 只读，工作区技能可增删改</div>
       <div id="skill-list"></div>
       <div class="mgr-divider"></div>
       <div style="display:flex; gap:8px;">
@@ -434,6 +434,7 @@ async function refreshSkillList() {
     const data = await resp.json();
     if (!data.ok) { box.innerHTML = '<div class="mgr-status err">✗ ' + (data.error || '加载失败') + '</div>'; return; }
     const skills = data.skills || [];
+    skillListCache = skills;  // /skill 命令浮层共用同一份缓存
     if (!skills.length) { box.innerHTML = '<div class="mgr-status">暂无技能</div>'; return; }
     box.innerHTML = '';
     skills.forEach(renderSkillRow);
@@ -450,12 +451,19 @@ function renderSkillRow(s) {
   const nm = document.createElement('span');
   nm.className = 'skill-name';
   nm.textContent = '📘 ' + s.name;
-  nm.title = '/skill ' + s.name + '（点击填入输入框）';
+  nm.title = '点击累积到 /skill 选择（可多选）';
   nm.style.cursor = 'pointer';
   nm.onclick = function () {
     closeManager();
     const input = document.getElementById('chat-input');
-    input.value = '/skill ' + s.name + ' ';
+    const v = input.value.trim();
+    if (v === '/skill' || v.startsWith('/skill ')) {
+      const sel = parseSkillSelection(v);  // 已有选择 → 累积，不覆盖
+      if (sel.names.indexOf(s.name) === -1) sel.names.push(s.name);
+      input.value = '/skill ' + sel.names.join(',') + (sel.taskPart ? ' ' + sel.taskPart : ' ');
+    } else {
+      input.value = '/skill ' + s.name + ' ';
+    }
     input.focus();
   };
   const ds = document.createElement('span');
@@ -1280,12 +1288,11 @@ function renderMarkdown(text) {
   return frag;
 }
 
-/* ---------- 斜杠命令（迭代 8 · 8.6：/goal /plan /chat） ---------- */
+/* ---------- 斜杠命令（迭代 8 · 8.6：/goal /plan /chat；迭代 9 修复：/skill 多选） ---------- */
 const CMD_ITEMS = [
   {cmd: '/goal', icon: '🎯', name: '/goal', desc: '目标模式：长任务自动续跑'},
   {cmd: '/plan', icon: '📐', name: '/plan', desc: '先制定计划再执行'},
-  {cmd: '/skill', icon: '📚', name: '/skill', desc: '显式装载技能执行任务'},
-  {cmd: '/skills', icon: '🗂', name: '/skills', desc: '浏览与管理技能'},
+  {cmd: '/skill', icon: '📚', name: '/skill', desc: '选择技能装载执行任务（可多选）'},
 ];
 
 function parseCommand(text) {
@@ -1302,9 +1309,6 @@ function parseCommand(text) {
     const rest = t === '/chat' ? '' : t.slice('/chat'.length).trim();
     return {cmd: 'chat', task: rest};
   }
-  if (t === '/skills' || t.startsWith('/skills ')) {  // 先于 /skill 判断
-    return {cmd: 'skills', task: t === '/skills' ? '' : t.slice('/skills'.length).trim()};
-  }
   if (t === '/skill' || t.startsWith('/skill ')) {
     const rest = t === '/skill' ? '' : t.slice('/skill'.length).trim();
     return {cmd: 'skill', task: rest};
@@ -1318,7 +1322,30 @@ function flashHint(input, text) {
   setTimeout(function () { input.placeholder = old; }, 3000);
 }
 
-/* / 命令浮层：输入 / 弹出可选命令，↑↓ 导航、Enter 选择、Esc 关闭、点击插入 */
+/* 技能列表缓存：/skill 命令浮层用；管理面板刷新时同步更新 */
+let skillListCache = null;
+async function ensureSkillList() {
+  if (skillListCache) return skillListCache;
+  try {
+    const resp = await fetch('/skills?workdir=' + encodeURIComponent(state.workspace || ''));
+    const data = await resp.json();
+    skillListCache = (data.ok && data.skills) ? data.skills : [];
+  } catch (e) { skillListCache = []; }
+  return skillListCache;
+}
+
+/* 从输入中提取已选技能名与任务部分（'/skill a,b 任务' → names=[a,b], taskPart='任务'） */
+function parseSkillSelection(v) {
+  const rest = v === '/skill' ? '' : v.slice('/skill'.length).trim();
+  const sp = rest.indexOf(' ');
+  const names = (sp === -1 ? rest : rest.slice(0, sp)).split(',')
+    .map(function (x) { return x.trim(); })
+    .filter(Boolean);
+  const taskPart = sp === -1 ? '' : rest.slice(sp + 1).trim();
+  return {names: names, taskPart: taskPart};
+}
+
+/* / 命令浮层：输入 / 弹出可选命令；输入 /skill 后同浮层列出全部技能（点击累积多选，再点取消） */
 function buildCmdPop() {
   const pop = document.getElementById('cmd-pop');
   const input = document.getElementById('chat-input');
@@ -1332,6 +1359,11 @@ function buildCmdPop() {
   };
   const render = function () {
     const v = input.value;
+    // /skill 已选命令 → 列出技能（已选打 ☑；带任务文本后收起）
+    if (v.startsWith('/skill') && (v === '/skill' || v.startsWith('/skill '))) {
+      const sel = parseSkillSelection(v);
+      if (!v.slice('/skill'.length).trim().includes(' ')) { renderSkillItems(sel.names); return; }
+    }
     if (v.startsWith('/') && !v.includes(' ') && !v.includes('\\n') && v.length <= 8) {
       const items = CMD_ITEMS.filter(function (it) { return it.cmd.indexOf(v) === 0; });
       if (items.length) {
@@ -1354,7 +1386,7 @@ function buildCmdPop() {
           row.appendChild(ds);
           row.onclick = function () {
             input.value = it.cmd + ' ';
-            pop.classList.remove('open');
+            render();  // /skill 会进入技能列表；其余命令因含空格自然收起
             input.focus();
           };
           pop.appendChild(row);
@@ -1364,6 +1396,48 @@ function buildCmdPop() {
       }
     }
     pop.classList.remove('open');
+  };
+  const renderSkillItems = function (selNames) {
+    ensureSkillList().then(function (skills) {
+      if (!skills.length) { pop.classList.remove('open'); return; }
+      const rows = [];
+      rows.push({icon: '🚀', name: '/skill', desc: '按当前选择发送（无任务时确认装载）', act: function () {
+        pop.classList.remove('open');
+        sendTask();
+      }});
+      skills.forEach(function (s) {
+        const selected = selNames.indexOf(s.name) !== -1;
+        rows.push({icon: selected ? '☑' : '📘', name: s.name, desc: (s.description || '') + (s.source !== 'workspace' ? ' · 只读' : ''), act: function () {
+          const names = selNames.slice();
+          const i = names.indexOf(s.name);
+          if (i === -1) { names.push(s.name); } else { names.splice(i, 1); }
+          input.value = '/skill ' + names.join(',') + ' ';
+          input.focus();
+          render();
+        }});
+      });
+      pop.innerHTML = '';
+      selIdx = Math.min(selIdx, rows.length - 1);
+      rows.forEach(function (r, i) {
+        const row = document.createElement('div');
+        row.className = 'cmd-item' + (i === selIdx ? ' sel' : '');
+        const ic = document.createElement('span');
+        ic.className = 'cmd-icon';
+        ic.textContent = r.icon;
+        const nm = document.createElement('span');
+        nm.className = 'cmd-name';
+        nm.textContent = r.name;
+        const ds = document.createElement('span');
+        ds.className = 'cmd-desc';
+        ds.textContent = r.desc;
+        row.appendChild(ic);
+        row.appendChild(nm);
+        row.appendChild(ds);
+        row.onclick = function () { r.act(); };
+        pop.appendChild(row);
+      });
+      pop.classList.add('open');
+    });
   };
   input.addEventListener('input', render);
   input.addEventListener('keydown', function (e) {
@@ -1388,16 +1462,14 @@ async function sendTask() {
   const input = document.getElementById('chat-input');
   const parsed = parseCommand(input.value);
   const cmd = parsed.cmd;
-  if (cmd === 'skills') { input.value = ''; openSkillsPanel(); return; }
   let task = parsed.task;
   let skillParam = '';
   if (cmd === 'skill') {
-    const sp = parsed.task.indexOf(' ');
-    const name = sp === -1 ? parsed.task : parsed.task.slice(0, sp);
-    const extra = sp === -1 ? '' : parsed.task.slice(sp + 1).trim();
-    if (!name) { flashHint(input, '/skill 需要技能名，例如：/skill python-testing 写单测'); return; }
-    skillParam = name;
-    task = extra || ('请确认已装载技能 ' + name + '，并简要说明你将如何应用它');
+    const sel = parseSkillSelection(input.value.trim());
+    const names = sel.names;
+    if (!names.length) { flashHint(input, '/skill 需要技能名，输入 /skill 后从列表选择（可多选）'); return; }
+    skillParam = names.join(',');
+    task = sel.taskPart || ('请确认已装载技能 ' + names.join('、') + '，并简要说明你将如何应用它们');
   }
   const goalMode = cmd === 'goal';
   const planMode = cmd === 'plan';

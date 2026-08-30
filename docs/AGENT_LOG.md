@@ -959,3 +959,18 @@
 - **测试与证据**：127（迭代 8 末）→ 146 passed；node --check + 无头垫片累计 36 项前端断言；真实冒烟累计 8 次
 - **切片中修复的真 bug**：Windows BOM 解析（9.2）、saveSkill 漏发 name（9.3）、管道 GBK 编码崩溃 `↳`（9.4）
 - **待办**：`match_skills` 仍为「推荐技能」预留（未接入 run）；9.5 后按需求进入下一迭代
+
+## 迭代 9 修复切片：/skill 命令与技能多选
+
+- **时间**：2026-08-30
+- **用户反馈**：① `/` 弹层同时出现 /skill 与 /skills 两种命令，只用一种即可——改为 `/skill`，选择后在**同一浮层**列出所有技能；② 技能栏点选不同技能时**互相覆盖**，应能累积多选
+- **Agent 修改了什么**（仅前端 `agent/web.py`，后端零改动）：
+  - `CMD_ITEMS`/`parseCommand` 移除 `/skills` 命令项（管理浮层保留在顶栏「📚 技能」入口）；SPEC 30.4 同步改写
+  - `buildCmdPop` 两级浮层：输入 `/skill` → 同浮层列出全部技能（已选 ☑/未选 📘，点击累积、再点取消；内置/SKILLS_DIR 行标「只读」），首行「🚀 /skill 按当前选择发送」；带任务文本后浮层自动收起；`skillListCache` + `ensureSkillList()` 供浮层异步加载
+  - `parseSkillSelection` 统一解析 `/skill a,b 任务` → names=[a,b] + taskPart；`sendTask` 多技能 URL `&skill=a,b`（后端逗号分隔已有，零改动）；默认确认话术含全部技能名
+  - `renderSkillRow` 点选累积：输入已以 `/skill ` 开头时把技能名**追加**进选择（不覆盖、不重复）；非 /skill 输入则新建选择；`refreshSkillList` 同步 `skillListCache`
+- **检查证据**：
+  - `pytest -q` → **146 passed**（后端零改动回归全绿）；`compileall` EXIT=0
+  - `node --check` EXIT=0；无头 DOM 垫片 **20/20 PASS**（CMD_ITEMS 仅 /skill、parseCommand ×3、命令浮层 3 项、技能浮层 4 行、☑/📘 状态、累积 demo,python-testing、取消、URL &skill=demo,python-testing 与默认确认话术、&skill=demo,code-review+任务保留、任务文本浮层收起、面板累积/去重/全新选择）
+  - 真实冒烟：`/events?skill=python-testing,code-review` → `skill_loaded ×2`、[DONE] 收尾，答复融合两规范（先写失败测试 + 最小 diff/红线核对/回归验证 + 写入 AGENT_LOG）
+- **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
