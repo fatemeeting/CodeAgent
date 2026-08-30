@@ -862,5 +862,17 @@
 
 - 交付：web_search 工具（DDG lite 零依赖 + 自定义 API 插拔）、goal 模式（自动续跑/受阻检测/状态持久化/恢复注入 + `/goal` 命令）、todo 任务清单（todo_write + 进度 UI）、delegate_subagent（隔离上下文子任务 + 嵌套轨迹）、上下文压缩（compaction + 截断保留摘要修复）
 - 测试规模：**123 passed**（mock LLM 免 key）+ 4 次真实任务冒烟；前端以 `node --check` + Node DOM 垫片（JSFLOW 系列）验证
-- 已知边界（如实记录）：subagent 预算 3 轮不可再委托；compaction 仅 Web 启用且失败回退旧截断；`/plan`、`/chat` 命令留待后续
+- 已知边界（如实记录）：subagent 预算 3 轮不可再委托；compaction 仅 Web 启用且失败回退旧截断；Web 单次任务无断点续传（断线=重发任务）
 - 未提交变更由用户管理仓库
+
+## 迭代 8 审查（agentos-coding-standards Gate）
+
+- **时间**：2026-08-30
+- **审查范围**：迭代 8 全量（8.0–8.6）——红线、契约一致性、静态重复、回归证据
+- **审查结论**：
+  - 红线全过：依赖仅 `openai==3.3.1`（requirements 单行）；密钥扫描仅命中 `.env.example` 占位符与 gate_check 正则定义（无真实 key）；`data/` gitignore；CLI/REPL 零回归（--help、/quit EXIT=0）
+  - 契约一致性：SPEC 27/29、CHECKLIST AH–AN（全勾选）、context-pack/gate 逐切片更新；AGENT_LOG 每切片证据链完整
+  - 静态检查：`mode-switch` 残留 0；`setMode/toggleMode/buildCmdPop/parseCommand/CMD_ITEMS` 各 1 处；`.mode-btn/.cmd-pop/.cmd-item` CSS 各 1 处（无重复规则）
+  - 回归证据：`pytest -q` → **127 passed**；`compileall` EXIT=0；`node --check` 通过；真实冒烟累计 6 次（goal 完成/受阻、复合 todo+web_search+subagent、web_search 直连、chat 只读、plan 执行）
+- **审查发现与处置**：① SPEC 29 缺输入栏按钮与命令浮层两项 → 已补（第 5/6 条）；② 迭代 8 总结「/plan、/chat 留待后续」已过时 → 已改（8.6 已实现双模式与 /plan、/chat 命令）
+- **人工放行决定**：待人工确认

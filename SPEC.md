@@ -230,6 +230,8 @@ coding-agent/
 2. **模式切换**：顶栏分段控件（💬 Chat / 🤖 Agent，localStorage 持久化）；`/chat <消息>` 按条强制 chat；`/goal`、`/plan` 按条强制 agent。
 3. **/plan 命令**：agent 模式下先 `make_plan` 生成计划 → `plan` 事件（前端 📐 执行计划块）→ 计划注入任务后执行（对齐 CLI `--plan`）。
 4. **后端**：`/events` 增 `mode`（chat/agent，默认 agent）与 `plan`（1 开启）参数；`run(mode, tools)` 参数化；`tool_schemas_for(names)` 工具集选择。
+5. **输入栏模式按钮**：输入框左侧胶囊按钮（🤖 Agent / 💬 Chat）点击切换并 localStorage 持久化（顶栏切换移除）。
+6. **斜杠命令浮层**：输入 `/` 弹出 `/goal`、`/plan` 选择浮层（图标 + 描述、前缀过滤、悬停/选中高亮、↑↓/Enter/Esc 键盘导航、点击插入）。
 
 ## 28. 迭代 8 · 切片 8.1 补充（/goal 斜杠命令）
 
