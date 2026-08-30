@@ -7,6 +7,7 @@ from typing import Any
 from .base import Tool
 from .file_tools import EDIT_FILE, READ_FILE, WRITE_FILE
 from .fs_tools import LIST_DIRECTORY, SEARCH_CONTENT
+from .search_tools import WEB_SEARCH
 from .shell_tools import EXECUTE_COMMAND
 
 TOOLS: list[Tool] = [
@@ -16,6 +17,7 @@ TOOLS: list[Tool] = [
     EXECUTE_COMMAND,
     LIST_DIRECTORY,
     SEARCH_CONTENT,
+    WEB_SEARCH,
 ]
 
 

@@ -211,3 +211,15 @@ coding-agent/
 1. **存储物理分层**：`data/sessions/<ws-slug>/<id>.json`（slug = 归一化工作区安全目录名 + 8 位 md5 防碰撞）；根 `index.json` 不变（仍带 workspace 字段）；旧版平铺 `<id>.json` 在 `SessionStore` 初始化时自动迁移到工作区目录（迁移失败保留旧文件，读取走兼容路径）；`_session_path` 优先识别旧平铺文件（兼容），否则按 index 中的 workspace 定位。
 2. **中断轮次标记**：切换/重放会话时，若最后一条 agent 消息的 trace 无 `turn_end` → 前端追加 `turn_end {interrupted: true}` 事件，轨迹渲染琥珀「上次中断 · 上次运行在此中断，未完成」行（对齐 DSH 的 interrupted closer 语义）；error 事件 severity=warn 渲染为琥珀 warn 行（error 红 / warn 琥珀分级）。
 3. **不做**（超需求）：zstd 压缩、SQLite 后端、write-behind 批次、fsync 持久性保证。
+
+## 27. 迭代 8（生命周期与编排的 DSH 对齐）
+
+> 对齐 DSH 的 goal / todo / subagent / compaction 能力 + web_search 工具扩展。全程走既有事件流架构（emit 回调 + 前端折叠块），CLI 零回归，仅 openai 依赖不变。
+
+1. **切片 8.0 工具扩展 web_search**：标准库 `urllib` + `html.parser`（零新依赖）；默认 DuckDuckGo HTML 接口（无需 key），`SEARCH_API_URL`（`{query}` 模板）与 `SEARCH_API_KEY` 可插拔自定义 API；`web_search {query, max_results(1-10,默认5)}` → `[N] 标题 / URL / 摘要`（摘要 200 字截断）；15s 超时、失败回填错误观测（复用 tool_result 染色，无新事件）；只读 GET 安全。
+2. **切片 8.1 goal 模式**：长目标自动续跑（显式 DONE 信号 + 提高迭代预算）、连续 N 轮无进展 → `blocked` 事件终止；goal 状态（open/blocked/done + 摘要）持久化到会话；恢复会话注入中断上下文（简化 `TOOL_OUTCOME_UNKNOWN`：提示先验证副作用、只重试幂等操作）；事件 `goal_start/goal_progress/goal_blocked/goal_end`；Web 目标徽章。
+3. **切片 8.2 todo 任务清单**：`todo_write` 工具（`{id, content, status}` 清单）+ `todo` 事件（全量快照）+ 前端清单折叠块与进度条；随 trace 持久化重放可见。
+4. **切片 8.3 subagent 工具**：`delegate_subagent {task}`（子线程独立 run、短预算、不可再委托，摘要回填）；并行由既有工具并行执行天然获得（不做 workflow DSL）；事件 `subagent_start/subagent_end`；前端嵌套轨迹块。
+5. **切片 8.4 上下文压缩**：历史超 `max_context_tokens` 时先 LLM 总结旧轮次为摘要（system 后插入）再按预算保留最近消息（替代直接丢弃）；`compact` 事件（压缩前后 token 数）；前端「上下文压缩」折叠块；仅 Web 会话历史启用；压缩失败回退旧截断逻辑。
+6. **切片 8.5 集成回归**：真实冒烟 ×3~4（goal 完成/受阻、复合 todo+subagent、web_search）；全量回归；证据入 AGENT_LOG 放行。
+7. **降级路径**：goal 无进展检测降级为轮数上限；subagent 预算 3 轮失败不重试；compaction 阈值 ≥80% 预算才触发。

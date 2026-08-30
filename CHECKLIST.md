@@ -228,3 +228,39 @@
 - [x] AG1 真实任务冒烟 ×2（正常 + 错误路径）：正常路径事件流 turn_start→工具→流式答复→turn_end→[DONE]，hello.py 创建并运行验证；错误路径 execute_command exit_code=1 失败信号正确、[DONE] 仍收尾
 - [x] AG2 CLI/REPL/会话/保存/滚动旧功能回归：pytest 98 全绿、compileall、--help、REPL /quit、Web 端点测试
 - [x] AG3 证据入 AGENT_LOG，CHECKLIST 迭代 7 全勾选放行
+
+## AH. 迭代 8 切片 8.0 工具扩展 web_search
+
+- [x] AH1 `agent/tools/search_tools.py`：标准库 urllib + html.parser，默认 DuckDuckGo lite（无 key，html 端点被拦时已切换），SEARCH_API_URL/SEARCH_API_KEY 可插拔
+- [x] AH2 `web_search` 注册进工具表（7 工具）；SYSTEM_PROMPT 提及；摘要截断/超时/错误观测
+- [x] AH3 测试：解析（html+两种布局）/缺 query/请求失败/条数钳制/模板 override/空结果；真实外网冒烟成功（python.org/W3Schools 结果）
+
+## AI. 迭代 8 切片 8.1 goal 模式
+
+- [ ] AI1 长目标续跑 + 显式 DONE + 连续 N 轮无进展 blocked 事件
+- [ ] AI2 goal 状态持久化 + 恢复注入中断上下文（幂等重试指引）
+- [ ] AI3 前端目标徽章；测试（完成/受阻/恢复注入）；CLI 回归
+
+## AJ. 迭代 8 切片 8.2 todo 任务清单
+
+- [ ] AJ1 `todo_write` 工具 + `todo` 事件快照
+- [ ] AJ2 前端清单折叠块 + 进度条；随 trace 持久化
+- [ ] AJ3 测试（工具 CRUD/事件/UI）
+
+## AK. 迭代 8 切片 8.3 subagent 工具
+
+- [ ] AK1 `delegate_subagent {task}`：子线程独立 run、短预算、不可再委托、摘要回填
+- [ ] AK2 事件 subagent_start/end + 前端嵌套轨迹块；并行复用工具并行执行
+- [ ] AK3 测试（返回/失败回填/并行）
+
+## AL. 迭代 8 切片 8.4 上下文压缩
+
+- [ ] AL1 `compact_history`：超预算先 LLM 总结旧轮次再裁剪；compact 事件（前后 token 数）
+- [ ] AL2 前端「上下文压缩」折叠块；失败回退旧截断
+- [ ] AL3 测试（触发/不触发/回退）
+
+## AM. 迭代 8 切片 8.5 集成回归
+
+- [ ] AM1 真实冒烟 ×3~4（goal 完成/受阻、todo+subagent 复合、web_search）
+- [ ] AM2 全量回归（pytest/CLI/REPL/会话/轨迹）
+- [ ] AM3 证据入 AGENT_LOG，迭代 8 放行

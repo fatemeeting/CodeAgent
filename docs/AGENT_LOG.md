@@ -725,3 +725,16 @@
 - 测试规模：**98 passed**（全程 mock LLM 免 key）+ 2 次真实任务冒烟；前端以 `node --check` + Node DOM 垫片（JSFLOW 系列）验证
 - 已知边界（如实记录）：Web 单次任务无断点续传（断线=重发任务）；无 zstd/SQLite/write-behind/fsync（超需求未做）；「对话|轨迹」Tab 全景视图留待迭代 8
 - 未提交变更由用户管理仓库
+
+## 迭代 8 切片 8.0：工具扩展 web_search
+
+- **时间**：2026-08-30
+- **给 Agent 的任务**：迭代 8 生命周期与编排对齐 · 切片 8.0——新增 web_search 网络搜索工具（零新依赖）
+- **Agent 修改了什么**：
+  - 新建 `agent/tools/search_tools.py`：标准库 `urllib` + `html.parser`；默认 **DuckDuckGo lite** 端点（无 key；首次用 html 端点实测被拦无结果类名，切换 lite 后正常）；`SEARCH_API_URL`（`{query}` 模板）/`SEARCH_API_KEY`（Bearer 头）可插拔自定义 API；`_DdgParser` 兼容 html（result__a/result__snippet）与 lite（result-link/result-snippet td）双布局；uddg 跳转链接还原；15s 超时、摘要 200 字截断、条数钳制 1-10、失败/空结果回填观测
+  - `agent/tools/__init__.py`：注册 `WEB_SEARCH`（7 工具）；`agent/loop.py` SYSTEM_PROMPT 提及网络搜索
+  - `tests/test_tools.py`：工具表断言 6→7；+7 用例（解析 html 布局/解析 lite 布局/缺 query/请求失败/条数钳制/模板 override/空结果）
+- **检查证据**：
+  - `pytest -q` → **105 passed**（98 + 7 新增）
+  - 真实外网冒烟：`web_search("python programming")` → 解析出 python.org 与 W3Schools 结果（标题/URL/摘要齐全）→ **REAL SEARCH: OK**
+- **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
