@@ -457,10 +457,14 @@ function renderSkillRow(s) {
     closeManager();
     const input = document.getElementById('chat-input');
     const v = input.value.trim();
-    if (v === '/skill' || v.startsWith('/skill ')) {
-      const sel = parseSkillSelection(v);  // 已有选择 → 累积，不覆盖
+    const idx = lastSkillIndex(v);
+    if (idx !== -1) {
+      // 已有 /skill 指令 → 在最后一个指令处追加（保留前置命令与后随任务）
+      const sel = parseSkillSelection(v);
       if (sel.names.indexOf(s.name) === -1) sel.names.push(s.name);
-      input.value = '/skill ' + sel.names.join(',') + (sel.taskPart ? ' ' + sel.taskPart : ' ');
+      input.value = (v.slice(0, idx) + '/skill ' + sel.names.join(',') + (sel.taskPart ? ' ' + sel.taskPart : '')).trim();
+    } else if (v) {
+      input.value = v + ' /skill ' + s.name;  // 已有内容（可能是 /goal 任务）→ 追加指令
     } else {
       input.value = '/skill ' + s.name + ' ';
     }
@@ -1295,25 +1299,69 @@ const CMD_ITEMS = [
   {cmd: '/skill', icon: '📚', name: '/skill', desc: '选择技能装载执行任务（可多选）'},
 ];
 
+/* 多指令解析：/goal 与 /plan 互斥（取先出现者）；/skill 独立维度，可与任一模式组合；
+   返回 {goalMode, planMode, chatFlag, names, task}。 */
 function parseCommand(text) {
   const t = text.trim();
-  if (t === '/goal' || t.startsWith('/goal ')) {
-    const rest = t === '/goal' ? '' : t.slice('/goal'.length).trim();
-    return {cmd: 'goal', task: rest};
+  const tokenPos = function (word) {
+    let i = t.indexOf(word);
+    while (i !== -1) {
+      const nxt = t[i + word.length];
+      if ((i === 0 || /\s/.test(t[i - 1])) && (nxt === undefined || /\s/.test(nxt))) return i;
+      i = t.indexOf(word, i + 1);
+    }
+    return -1;
+  };
+  const goalPos = tokenPos('/goal');
+  const planPos = tokenPos('/plan');
+  const chatPos = tokenPos('/chat');
+  let goalMode = goalPos !== -1;
+  let planMode = planPos !== -1;
+  if (goalMode && planMode) {  // 互斥：先出现的生效
+    if (planPos < goalPos) { goalMode = false; } else { planMode = false; }
   }
-  if (t === '/plan' || t.startsWith('/plan ')) {
-    const rest = t === '/plan' ? '' : t.slice('/plan'.length).trim();
-    return {cmd: 'plan', task: rest};
+  // /skill 指令：可多个、位置任意、与模式独立；后随空格分隔的技能名 token（逗号分隔）
+  const names = [];
+  const taskAfterSkills = t.replace(/(^|\s)\/skill(?=\s|$)(\s+([^\s/][^\s]*))?/g, function (all, pre, ws, nameTok) {
+    (nameTok || '').split(',').forEach(function (n) {
+      n = n.trim();
+      if (n && names.indexOf(n) === -1) names.push(n);
+    });
+    return ' ';
+  });
+  // 模式指令从任务文本中剥离
+  const task = taskAfterSkills
+    .replace(/(^|\s)\/goal(?=\s|$)/g, ' ')
+    .replace(/(^|\s)\/plan(?=\s|$)/g, ' ')
+    .replace(/(^|\s)\/chat(?=\s|$)/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return {goalMode: goalMode, planMode: planMode, chatFlag: chatPos !== -1, names: names, task: task};
+}
+
+/* 输入中最后一个独立 /skill 指令的位置（'/skills' 不算） */
+function lastSkillIndex(v) {
+  let idx = -1;
+  let i = v.indexOf('/skill');
+  while (i !== -1) {
+    const nxt = v[i + 6];
+    if (nxt === undefined || nxt === ' ' || nxt === ',') idx = i;
+    i = v.indexOf('/skill', i + 1);
   }
-  if (t === '/chat' || t.startsWith('/chat ')) {
-    const rest = t === '/chat' ? '' : t.slice('/chat'.length).trim();
-    return {cmd: 'chat', task: rest};
-  }
-  if (t === '/skill' || t.startsWith('/skill ')) {
-    const rest = t === '/skill' ? '' : t.slice('/skill'.length).trim();
-    return {cmd: 'skill', task: rest};
-  }
-  return {cmd: '', task: t};
+  return idx;
+}
+
+/* 取输入中最后一个 /skill 指令后跟随的技能名与任务部分 */
+function parseSkillSelection(v) {
+  const idx = lastSkillIndex(v);
+  if (idx === -1) return {names: [], taskPart: ''};
+  const after = v.slice(idx + '/skill'.length).trim();
+  const sp = after.indexOf(' ');
+  const names = (sp === -1 ? after : after.slice(0, sp)).split(',')
+    .map(function (x) { return x.trim(); })
+    .filter(Boolean);
+  const taskPart = sp === -1 ? '' : after.slice(sp + 1).trim();
+  return {names: names, taskPart: taskPart};
 }
 
 function flashHint(input, text) {
@@ -1334,17 +1382,6 @@ async function ensureSkillList() {
   return skillListCache;
 }
 
-/* 从输入中提取已选技能名与任务部分（'/skill a,b 任务' → names=[a,b], taskPart='任务'） */
-function parseSkillSelection(v) {
-  const rest = v === '/skill' ? '' : v.slice('/skill'.length).trim();
-  const sp = rest.indexOf(' ');
-  const names = (sp === -1 ? rest : rest.slice(0, sp)).split(',')
-    .map(function (x) { return x.trim(); })
-    .filter(Boolean);
-  const taskPart = sp === -1 ? '' : rest.slice(sp + 1).trim();
-  return {names: names, taskPart: taskPart};
-}
-
 /* / 命令浮层：输入 / 弹出可选命令；输入 /skill 后同浮层列出全部技能（点击累积多选，再点取消） */
 function buildCmdPop() {
   const pop = document.getElementById('cmd-pop');
@@ -1359,10 +1396,15 @@ function buildCmdPop() {
   };
   const render = function () {
     const v = input.value;
-    // /skill 已选命令 → 列出技能（已选打 ☑；带任务文本后收起）
-    if (v.startsWith('/skill') && (v === '/skill' || v.startsWith('/skill '))) {
-      const sel = parseSkillSelection(v);
-      if (!v.slice('/skill'.length).trim().includes(' ')) { renderSkillItems(sel.names); return; }
+    // 输入中最后一个 /skill 指令 → 列出技能（已选打 ☑；带任务文本后收起）
+    const idx = lastSkillIndex(v);
+    if (idx !== -1) {
+      const after = v.slice(idx + '/skill'.length).trim();
+      if (!after.includes(' ')) {
+        const curNames = after.split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+        renderSkillItems(curNames);
+        return;
+      }
     }
     if (v.startsWith('/') && !v.includes(' ') && !v.includes('\\n') && v.length <= 8) {
       const items = CMD_ITEMS.filter(function (it) { return it.cmd.indexOf(v) === 0; });
@@ -1408,10 +1450,14 @@ function buildCmdPop() {
       skills.forEach(function (s) {
         const selected = selNames.indexOf(s.name) !== -1;
         rows.push({icon: selected ? '☑' : '📘', name: s.name, desc: (s.description || '') + (s.source !== 'workspace' ? ' · 只读' : ''), act: function () {
-          const names = selNames.slice();
-          const i = names.indexOf(s.name);
-          if (i === -1) { names.push(s.name); } else { names.splice(i, 1); }
-          input.value = '/skill ' + names.join(',') + ' ';
+          // 在输入中最后一个 /skill 指令处更新选择（保留前置命令与后随任务）
+          const cur = input.value;
+          const i = lastSkillIndex(cur);
+          const after = i === -1 ? '' : cur.slice(i + '/skill'.length).trim();
+          const curNames = after.split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+          const k = curNames.indexOf(s.name);
+          if (k === -1) { curNames.push(s.name); } else { curNames.splice(k, 1); }
+          input.value = (i === -1 ? '' : cur.slice(0, i)) + '/skill ' + curNames.join(',') + ' ';
           input.focus();
           render();
         }});
@@ -1461,26 +1507,25 @@ function buildCmdPop() {
 async function sendTask() {
   const input = document.getElementById('chat-input');
   const parsed = parseCommand(input.value);
-  const cmd = parsed.cmd;
+  const goalMode = parsed.goalMode;
+  const planMode = parsed.planMode;
+  const chatCmd = parsed.chatFlag;
+  const names = parsed.names;
   let task = parsed.task;
-  let skillParam = '';
-  if (cmd === 'skill') {
-    const sel = parseSkillSelection(input.value.trim());
-    const names = sel.names;
-    if (!names.length) { flashHint(input, '/skill 需要技能名，输入 /skill 后从列表选择（可多选）'); return; }
-    skillParam = names.join(',');
-    task = sel.taskPart || ('请确认已装载技能 ' + names.join('、') + '，并简要说明你将如何应用它们');
-  }
-  const goalMode = cmd === 'goal';
-  const planMode = cmd === 'plan';
-  const chatCmd = cmd === 'chat';
+  const skillParam = names.length ? names.join(',') : '';
+  // /skill 是独立维度：与模式命令组合时各自生效
+  if (!task && skillParam) task = '请确认已装载技能 ' + names.join('、') + '，并简要说明你将如何应用它们';
   let mode = state.mode;
-  if (chatCmd) mode = 'chat';
-  if (goalMode || planMode || skillParam) mode = 'agent';  // 这三类命令仅 agent 模式
+  if (goalMode || planMode) mode = 'agent';       // 执行模式命令优先
+  else if (chatCmd) mode = 'chat';                // /chat 只读（技能按 modes 过滤）
+  else if (skillParam) mode = 'agent';            // 仅 /skill 默认 agent 执行
   if (!task) {
     if (goalMode) flashHint(input, '/goal 需要跟随任务，例如：/goal 实现用户登录功能');
     if (planMode) flashHint(input, '/plan 需要跟随任务，例如：/plan 实现用户登录功能');
     if (chatCmd) flashHint(input, '/chat 需要跟随问题，例如：/chat 解释什么是装饰器');
+    if (!skillParam && input.value.trim().indexOf('/skill') !== -1) {
+      flashHint(input, '/skill 需要技能名，输入 /skill 后从列表选择（可多选）');
+    }
     return;
   }
   input.value = '';

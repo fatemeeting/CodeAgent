@@ -300,6 +300,12 @@
 - [x] AT2 技能栏点选不同技能累积进 `/skill a,b` 而非互相覆盖；`/skill a,b [任务]` 发送时 `&skill=a,b` 多技能装载
 - [x] AT3 回归：pytest、node --check、无头垫片（命令解析/弹层多选/累积/多技能 URL）、真实冒烟
 
+## AU. 迭代 9 修复 2（命令组合与模式互斥）
+
+- [x] AU1 `/skill` 与 `/goal`/`/plan`/`/chat` 可组合（任意顺序），`&skill=` 与模式参数同时生效
+- [x] AU2 `/goal` 与 `/plan` 互斥：同时出现只生效先出现的一个
+- [x] AU3 技能栏点选可追加到已有命令输入（如 `/goal 任务 /skill a` 追加 b）；回归（pytest/node/垫片/真实冒烟）
+
 ## AR. 迭代 9 切片 9.4 内置技能
 
 - [x] AR1 内置 python-testing / code-review / web-frontend（SKILL.md + 资源）

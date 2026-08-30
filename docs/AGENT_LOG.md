@@ -974,3 +974,18 @@
   - `node --check` EXIT=0；无头 DOM 垫片 **20/20 PASS**（CMD_ITEMS 仅 /skill、parseCommand ×3、命令浮层 3 项、技能浮层 4 行、☑/📘 状态、累积 demo,python-testing、取消、URL &skill=demo,python-testing 与默认确认话术、&skill=demo,code-review+任务保留、任务文本浮层收起、面板累积/去重/全新选择）
   - 真实冒烟：`/events?skill=python-testing,code-review` → `skill_loaded ×2`、[DONE] 收尾，答复融合两规范（先写失败测试 + 最小 diff/红线核对/回归验证 + 写入 AGENT_LOG）
 - **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
+
+## 迭代 9 修复切片 2：命令组合与模式互斥
+
+- **时间**：2026-08-30
+- **用户反馈**：`/plan` 与 `/goal` 应只能选其一；`/skill` 应与其它命令**独立处理**——现状是输入带 `/goal` 后就无法再用 `/skill`，要求重新梳理逻辑
+- **Agent 修改了什么**（仅前端 `agent/web.py`，后端零改动）：
+  - `parseCommand` 重写为**多指令解析**：从输入任意位置提取模式指令 `/goal`、`/plan`、`/chat`（`/goal` 与 `/plan` 互斥——同时出现只生效**先出现**的一个）与 `/skill <names>`（可多个、位置任意、names 累积去重、`/skills` 不误判），剥离全部指令后剩余文本即任务；返回 `{goalMode, planMode, chatFlag, names, task}`
+  - `sendTask` 模式优先级：goal/plan → agent；chat → chat（技能按 modes 过滤）；仅 skill → agent；`&goal=1`/`&plan=1`/`&skill=` 可同时出现在 URL（后端本就独立解析）
+  - `lastSkillIndex`/`parseSkillSelection`：定位输入中**最后一个** `/skill` 指令；技能浮层与技能栏点选都能在组合输入上就地更新（`/goal 任务 /skill a` + 点 b → `/goal 任务 /skill a,b`；`/goal 任务` + 点 b → 追加 ` /skill b`；后随指令保留）
+  - SPEC 30.4 补「命令可组合 / 模式互斥」语义；CHECKLIST 增 AU 节
+- **检查证据**：
+  - `pytest -q` → **146 passed**（后端零改动）；`compileall` EXIT=0
+  - `node --check` EXIT=0；无头 DOM 垫片 **21/21 PASS**（组合解析顺/逆序、互斥先出现者生效 ×2、chat+skill、多技能+任务、裸 /skill、/skills 不误判、普通任务、URL goal+skill/chat+skill/plan+skill/默认话术 ×4、点选追加 ×4、非开头 /skill 浮层 ×3）
+  - 真实冒烟：`/events?task=…&goal=1&skill=python-testing` → `goal_start` + `goal_end` + `skill_loaded` 三事件齐备、[DONE] 收尾，答复体现 python-testing 规范（组合模式端到端生效）
+- **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
