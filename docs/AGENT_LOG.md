@@ -941,3 +941,21 @@
   - 真实冒烟 ×2：① CLI `--skill python-testing` 只读分析任务——答复完整体现规范（AAA 结构、`pytest.raises`、None 边界、非字符串类型、路径穿越回归、并定位到 `tests/test_skills.py:141-151` 的差距），未写任何文件；② Web `/events?skill=python-testing`——70 帧、`skill_loaded {name: python-testing}` 帧、流式答复体现规范（先写失败用例、主路径/边界/错误路径、mock 外部 API、tmp_path、pytest -q 全绿收尾）、`[DONE]` 正常收尾
   - 未指定技能不自动装载：单元测试 `test_run_skills`（未指定 → system 无「已装载技能」）继续全绿
 - **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
+
+## 迭代 9 切片 9.5：集成回归（迭代 9 放行）
+
+- **时间**：2026-08-30
+- **给 Agent 的任务**：切片 9.5——迭代 9 全量回归 + 真实冒烟（显式 /skill + chat 共存、未指定不装载、CRUD 共存），证据入日志后放行
+- **Agent 修改了什么**：仅契约文件（CHECKLIST AS2 按「仅显式」决策修订：去自动匹配措辞；context-pack/gate → 9.5）；无代码改动（回归零失败）
+- **检查证据**：
+  - 全量回归：`pytest -q` → **146 passed**；`compileall` EXIT=0；`--help`（agent / agent.web）EXIT=0；REPL `/quit` EXIT=0 正常退出
+  - 前端回归：`node --check` EXIT=0；无头 DOM 垫片 **15/15 PASS**（parseCommand ×3、CMD_ITEMS、skill_loaded 块 ×2、技能面板渲染 ×4（含内置只读标签）、两步删除 ×2、EventSource skill/agent 模式 ×2、内置 code-review 装载）
+  - 真实冒烟 ×5：A `mode=chat&skill=code-review` → `skill_loaded ['code-review']`、答复体现评审规范、[DONE]；B `mode=chat&skill=python-testing`（agent-only）→ 未装载（modes 过滤）、[DONE]；C `mode=chat` 未指定 → 未装载（无自动匹配）、[DONE]；D 会话+技能 CRUD 共存（POST /sessions 创建 s2026083 → 列表可见 → POST /skills coexist → 列表 3 内置 + 1 工作区 → DELETE 双成功 → 终态仅 3 内置）；E CLI `--skill python-testing` / Web `/events?skill=python-testing`（9.4 已验，回归保持）
+- **人工放行决定**：通过（迭代 9 全量放行；代码待提交，仓库由用户管理）
+
+## 迭代 9 总结（Skills 模块）
+
+- **交付**：① 存储解析（9.1）：SKILL.md frontmatter 三级目录合并（内置 < SKILLS_DIR < 工作区，就近覆盖）、BOM 容忍；② 显式注入（9.2）：`run(skills=)` + `skill_loaded` 事件 + CLI `--skill`/`--list-skills`，**无自动匹配**（用户决策）；③ 管理 UI（9.3）：`GET/POST/PUT/DELETE /skills` 工作区级 CRUD（名称校验 + is_relative_to 越界防护、内置/env 只读）+「📚 技能装载」块 + /skills 浮层与顶栏入口；④ 内置技能（9.4）：python-testing / code-review / web-frontend
+- **测试与证据**：127（迭代 8 末）→ 146 passed；node --check + 无头垫片累计 36 项前端断言；真实冒烟累计 8 次
+- **切片中修复的真 bug**：Windows BOM 解析（9.2）、saveSkill 漏发 name（9.3）、管道 GBK 编码崩溃 `↳`（9.4）
+- **待办**：`match_skills` 仍为「推荐技能」预留（未接入 run）；9.5 后按需求进入下一迭代

@@ -301,6 +301,6 @@
 
 ## AS. 迭代 9 切片 9.5 集成回归
 
-- [ ] AS1 全量回归（pytest/CLI/REPL/Web）
-- [ ] AS2 真实冒烟（自动匹配 + 手动 /skill + chat 共存）
-- [ ] AS3 证据入 AGENT_LOG，迭代 9 放行
+- [x] AS1 全量回归（pytest/CLI/REPL/Web 端点/前端 node 检查）
+- [x] AS2 真实冒烟（显式 /skill + chat 模式共存 + 未指定不自动装载 + 会话/技能 CRUD）
+- [x] AS3 证据入 AGENT_LOG，迭代 9 放行

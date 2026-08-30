@@ -1,23 +1,23 @@
 # context-pack.md — 当前阶段上下文包
 
-> 当前阶段：**迭代 9 · 切片 9.4（内置技能）**
+> 当前阶段：**迭代 9 · 切片 9.5（集成回归）**
 
 ## 当前阶段目标
 
-新增三个内置技能（随发行、只读）：`skills/python-testing`（pytest 测试规范）、`skills/code-review`（评审规范）、`skills/web-frontend`（前端零依赖规范）。每个 = 目录 + `SKILL.md`（frontmatter name/description/keywords/modes + 正文 ≤4000 字）。技能仍**仅显式指定装载**（/skill 命令、CLI --skill、/events?skill），不接入自动匹配。更新受影响断言（`GET /skills` 列表现在含 builtin 技能；内置不可删除）。
+迭代 9 收尾回归：全量 pytest + compileall + CLI/REPL/Web 端点回归 + 前端 node --check 与无头垫片；真实冒烟覆盖「显式 /skill + chat 模式共存」（chat 仅装载 modes 含 chat 的技能、agent-only 技能被过滤、未指定不自动装载）与「会话/技能 CRUD 共存」。失败项定位到具体切片，只修该切片；证据入 AGENT_LOG 后放行迭代 9。
 
 ## 必须读
 
-- `SPEC.md` 第 30 节、`CHECKLIST.md` AR 节（AR2 已按「仅显式」修订）
-- `agent/skills.py`（`_parse_skill`/`load_skills`/`_load_dir`）、`agent/cli.py`（--list-skills）
-- `tests/test_skills.py`（merge 优先级）、`tests/test_web.py`（`test_web_skills_crud` 初始列表断言）
+- `SPEC.md` 第 30 节、`CHECKLIST.md` AO–AS 节（AS2 已按「仅显式」修订）
+- `docs/AGENT_LOG.md` 迭代 9 各切片条目（9.1–9.4）
+- `agent/web.py`（/events worker、/skills 端点）、`agent/cli.py`（--skill/--list-skills/_harden_stdio）
 
 ## 不得读 / 不得改
 
 - `.env`（真实凭据）
-- 9.3 的 CRUD 端点与浮层（已放行，不重改）
+- 已放行切片代码（9.1–9.4），回归失败才允许最小修复
 
 ## 输出要求
 
-- 产出：`skills/python-testing/SKILL.md`、`skills/code-review/SKILL.md`、`skills/web-frontend/SKILL.md`；`tests/test_web.py` 断言更新
-- 验收：`pytest -q` 全绿（约 146）；CLI `--list-skills` 显示 3 个内置（免 key）；真实冒烟显式装载 python-testing，答复体现规范
+- 产出：契约文件勾选 + `docs/AGENT_LOG.md` 迭代 9 总结
+- 验收：`pytest -q` 全绿（146）；compileall/--help/REPL /quit；node --check + 垫片冒烟；真实冒烟 ×2（chat+skill 共存、CRUD 共存）；迭代 9 放行
