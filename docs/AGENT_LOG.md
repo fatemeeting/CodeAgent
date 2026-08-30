@@ -827,6 +827,37 @@
   - **AM2 回归**：`pytest -q` → **123 passed**；`compileall` EXIT=0；`--help` EXIT=0；REPL `/quit` EXIT=0
 - **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
 
+## 迭代 8 切片 8.6：chat / agent 双模式 + /plan 命令
+
+- **时间**：2026-08-30
+- **给 Agent 的任务**：把 CodeAgent 编为两种模式——chat（不可编辑文件）/ agent（可编辑，支持 /goal、/plan），并实现 /plan 命令
+- **Agent 修改了什么**：
+  - `agent/tools/__init__.py`：`READ_ONLY_TOOL_NAMES`（read_file/list_directory/search_content/web_search）+ `tool_schemas_for(names)` 工具集选择
+  - `agent/loop.py`：`run(mode="agent")` 参数——chat 模式 system prompt 追加「仅可读取与搜索，不能修改文件/执行命令/委派子代理」明示约束；工具集由调用方传入
+  - `agent/web.py` 后端：`/events` 增 `mode=chat|agent`（默认 agent）与 `plan=1` 参数；worker 中 chat 模式用只读工具集、plan 模式先 `make_plan` → `plan` 事件 → 计划注入任务执行（对齐 CLI `--plan`，失败按无计划继续）
+  - `agent/web.py` 前端：顶栏分段模式切换（💬 Chat / 🤖 Agent，localStorage 持久化 `agent.mode`）；`parseCommand` 扩展 `/plan`、`/chat`（空命令各配用法提示）；`sendTask` 计算生效模式（`/chat` 强制 chat；`/goal` `/plan` 强制 agent；否则 state.mode）并带 `&mode=`/`&plan=1`；`handleEvent` 的 `plan` 分支渲染「📐 执行计划」块
+  - 测试：`test_tools.py` +1（tool_schemas_for 过滤）、`test_loop.py` +2（chat 模式 prompt+只读工具、agent 默认全工具）、`test_web.py` +1（mode=chat 只读 + plan=1 事件与注入）
+- **检查证据**：
+  - `pytest -q` → **127 passed**（123 + 4）
+  - 冒烟标记（mode-switch/setMode/cmd plan/chat/`case 'plan'`/URL 参数拼接）就位；`node --check` 通过
+  - Node DOM 垫片：默认 agent → 切 chat → `/goal` 强制 agent+goal=1 且去前缀 → `/plan` URL plan=1 + 📐 计划块 → `/chat` 强制 chat → 空命令提示 → **JSFLOW 8.6 双模式 OK**
+  - 真实冒烟：chat 模式工具仅 `{list_directory}`（无写/执行工具）+ 正常答复；plan 模式 `plan` 事件（三步计划）+ `plan_demo.txt` 落盘 → **SMOKE 8.6 REAL ALL OK**
+- **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
+
+## 迭代 8 切片 8.6 补充：输入栏模式按钮 + / 命令浮层
+
+- **时间**：2026-08-30
+- **给 Agent 的任务**（用户反馈）：① 输入框左侧放按钮切换 agent/chat 模式；② 输入 `/` 弹出浮层选择 `/plan` 或 `/goal`（要求美观）
+- **Agent 修改了什么**（`agent/web.py`）：
+  - 移除顶栏模式切换，输入框左侧新增 `#mode-toggle` 胶囊按钮（🤖 Agent / 💬 Chat 随模式换文案与配色，title 提示含义，点击 `toggleMode` 切换并 localStorage 持久化；`setMode` 重写同步按钮态）
+  - 输入框外包 `.input-wrap`，上方挂 `#cmd-pop` 命令浮层：`CMD_ITEMS`（🎯 /goal「目标模式：长任务自动续跑」、📐 /plan「先制定计划再执行」）；输入以 `/` 开头且无空格/换行时按前缀过滤弹出；悬停/选中浅蓝高亮（`.cmd-item.sel`）；↑↓ 导航、Enter 选中插入（自动补空格）、Esc 关闭、blur 延迟关闭、点击插入；浮层圆角 12px + 阴影浮起
+  - 普通 Enter 仍直接发送（浮层关闭时）
+- **检查证据**：
+  - `pytest -q` → **127 passed**（前端改动无回归）
+  - 冒烟标记（`mode-toggle`/`toggleMode`/`cmd-pop`/`CMD_ITEMS`/`buildCmdPop` 等就位、`mode-switch` 已移除）；`node --check` 通过
+  - Node DOM 垫片（事件捕获型 shim）：按钮默认/切换/持久化、`/g` 过滤只剩 /goal 且首项高亮、点击插入 `/goal `、`/p` + ↑↓ + Enter 插入 `/plan `、Esc 关闭、普通 Enter 仍发送 → **JSFLOW 8.6 输入栏 UI OK**
+- **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
+
 ## 迭代 8 总结（发布追踪）
 
 - 交付：web_search 工具（DDG lite 零依赖 + 自定义 API 插拔）、goal 模式（自动续跑/受阻检测/状态持久化/恢复注入 + `/goal` 命令）、todo 任务清单（todo_write + 进度 UI）、delegate_subagent（隔离上下文子任务 + 嵌套轨迹）、上下文压缩（compaction + 截断保留摘要修复）

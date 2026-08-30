@@ -224,6 +224,13 @@ coding-agent/
 6. **切片 8.5 集成回归**：真实冒烟 ×3~4（goal 完成/受阻、复合 todo+subagent、web_search）；全量回归；证据入 AGENT_LOG 放行。
 7. **降级路径**：goal 无进展检测降级为轮数上限；subagent 预算 3 轮失败不重试；compaction 阈值 ≥80% 预算才触发。
 
+## 29. 迭代 8 · 切片 8.6（chat / agent 双模式 + /plan 命令）
+
+1. **双模式**：chat 模式 = 只读工具集（read_file/list_directory/search_content/web_search），不可编辑文件、执行命令、委派子代理；agent 模式（默认）= 全部 9 工具；模式约束写入 system prompt。
+2. **模式切换**：顶栏分段控件（💬 Chat / 🤖 Agent，localStorage 持久化）；`/chat <消息>` 按条强制 chat；`/goal`、`/plan` 按条强制 agent。
+3. **/plan 命令**：agent 模式下先 `make_plan` 生成计划 → `plan` 事件（前端 📐 执行计划块）→ 计划注入任务后执行（对齐 CLI `--plan`）。
+4. **后端**：`/events` 增 `mode`（chat/agent，默认 agent）与 `plan`（1 开启）参数；`run(mode, tools)` 参数化；`tool_schemas_for(names)` 工具集选择。
+
 ## 28. 迭代 8 · 切片 8.1 补充（/goal 斜杠命令）
 
 1. **对话输入命令**：输入 `/goal <任务>` 时本回合进入目标模式（任务文本去掉前缀，EventSource 带 `goal=1`）；仅输入 `/goal` 时占位符闪烁用法提示；`/plan`、`/chat` 命令后续切片实现。

@@ -602,3 +602,33 @@ def test_run_cli_skips_compaction():
         out = run(cfg, "现在的问题", workdir=".", history=_big_history())
     assert out == "完成"
     assert client.chat.call_count == 1  # 仅主循环一次，无压缩调用
+
+
+# ---------- chat/agent 双模式（迭代 8 · 8.6） ----------
+
+def test_run_chat_mode_uses_readonly_tools():
+    """chat 模式：system 明示只读约束 + 调用方传入只读工具集。"""
+    from agent.tools import READ_ONLY_TOOL_NAMES, tool_schemas_for
+
+    client = mock.Mock()
+    client.chat.return_value = _response("完成")
+    with mock.patch("agent.loop.LLMClient", return_value=client):
+        out = run(
+            _config(), "你好", workdir=".", mode="chat",
+            tools=tool_schemas_for(READ_ONLY_TOOL_NAMES),
+        )
+    assert out == "完成"
+    messages, kwargs = client.chat.call_args[0][0], client.chat.call_args[1]
+    assert "chat 模式" in messages[0]["content"] and "不能修改文件" in messages[0]["content"]
+    tool_names = {t["function"]["name"] for t in kwargs.get("tools") or []}
+    assert tool_names == {"read_file", "list_directory", "search_content", "web_search"}
+
+
+def test_run_agent_mode_defaults_all_tools():
+    client = mock.Mock()
+    client.chat.return_value = _response("完成")
+    with mock.patch("agent.loop.LLMClient", return_value=client):
+        run(_config(), "你好", workdir=".")
+    kwargs = client.chat.call_args[1]
+    tool_names = {t["function"]["name"] for t in kwargs.get("tools") or []}
+    assert "write_file" in tool_names and "delegate_subagent" in tool_names  # 全工具

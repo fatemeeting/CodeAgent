@@ -554,3 +554,52 @@ def test_web_sse_goal_param_enables_goal_mode(tmp_path):
         server.server_close()
     assert '"type": "goal_start"' in raw and '"type": "goal_end"' in raw
     assert '"type": "goal_start"' not in raw2  # 无 goal 参数不开启
+
+
+def test_web_sse_chat_mode_readonly_and_plan(tmp_path):
+    """/events?mode=chat 只读工具 + chat 提示；?plan=1 计划事件与注入。"""
+    server = ThreadingHTTPServer(("127.0.0.1", 0), AgentHandler)
+    server.config = _config()
+    server.workdir = "."
+    server.sessions = SessionStore(tmp_path / "data" / "sessions")
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = server.server_address[1]
+    client = mock.Mock()
+    captured = {}
+
+    def chat_stream(messages, tools=None, on_content=None, on_reasoning=None, on_retry=None):
+        captured["messages"] = [dict(m) for m in messages]
+        captured["tools"] = [dict(t) for t in (tools or [])]
+        if on_content:
+            on_content("完成")
+        return _response("完成")
+
+    client.chat_stream = mock.Mock(side_effect=chat_stream)
+    try:
+        with mock.patch("agent.web.LLMClient", return_value=client), mock.patch(
+            "agent.web.make_plan", return_value="1. 分析\n2. 实现"
+        ):
+            # chat 模式
+            with urllib.request.urlopen(
+                f"http://127.0.0.1:{port}/events?task=" + urllib.parse.quote("你好") + "&mode=chat"
+            ) as resp:
+                raw = resp.read().decode("utf-8")
+            assert "chat 模式" in captured["messages"][0]["content"]
+            tool_names = {t["function"]["name"] for t in captured["tools"]}
+            assert tool_names == {"read_file", "list_directory", "search_content", "web_search"}
+            assert "write_file" not in raw
+            # plan 模式
+            captured.clear()
+            with urllib.request.urlopen(
+                f"http://127.0.0.1:{port}/events?task=" + urllib.parse.quote("实现登录") + "&plan=1"
+            ) as resp:
+                raw2 = resp.read().decode("utf-8")
+            assert '"type": "plan"' in raw2
+            last_user = next(
+                (m for m in reversed(captured["messages"]) if m["role"] == "user"), None
+            )
+            assert last_user and "已制定的执行计划" in last_user["content"]
+    finally:
+        server.shutdown()
+        server.server_close()

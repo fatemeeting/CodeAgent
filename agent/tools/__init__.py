@@ -24,10 +24,18 @@ TOOLS: list[Tool] = [
     DELEGATE_SUBAGENT,
 ]
 
+# chat 模式：只读工具集（不可编辑文件、执行命令、委派子代理）
+READ_ONLY_TOOL_NAMES = {"read_file", "list_directory", "search_content", "web_search"}
+
 
 def tool_schemas() -> list[dict[str, Any]]:
     """返回全部工具的 OpenAI function calling schema。"""
     return [t.to_schema() for t in TOOLS]
+
+
+def tool_schemas_for(names: set[str] | None = None) -> list[dict[str, Any]]:
+    """返回指定工具名的 schema（None 返回全部）。"""
+    return [t.to_schema() for t in TOOLS if names is None or t.name in names]
 
 
 def dispatch(name: str, arguments: dict[str, Any], workdir: str) -> str:

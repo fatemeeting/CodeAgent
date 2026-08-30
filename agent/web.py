@@ -19,7 +19,9 @@ from pathlib import Path
 from .config import Config
 from .llm import LLMClient
 from .loop import run
+from .plan import make_plan
 from .sessions import SessionStore
+from .tools import READ_ONLY_TOOL_NAMES, tool_schemas_for
 from .tools.shell_tools import execute_command, is_dangerous
 
 INDEX_HTML = """<!DOCTYPE html>
@@ -90,7 +92,20 @@ INDEX_HTML = """<!DOCTYPE html>
   .msg.user .msg-col { align-items: flex-end; }
   .msg.agent .msg-col { align-items: flex-start; }
   .role-label { font-size: 12px; color: var(--caption); margin-bottom: 4px; }
-  #chat-inputbar { display: flex; flex-shrink: 0; gap: 10px; padding: 12px 16px 16px; background: var(--surface); border-top: 1px solid var(--border-l1); align-items: flex-end; }
+  #chat-inputbar { display: flex; flex-shrink: 0; gap: 10px; padding: 12px 16px 16px; background: var(--surface); border-top: 1px solid var(--border-l1); align-items: flex-end; position: relative; }
+  .input-wrap { flex: 1; position: relative; display: flex; min-width: 0; }
+  /* 输入框左侧模式切换按钮（迭代 8 · 8.6） */
+  .mode-btn { flex-shrink: 0; border: 1px solid var(--border-l1); background: var(--bg); color: var(--muted); border-radius: 999px; padding: 10px 14px; cursor: pointer; font-size: 13px; white-space: nowrap; line-height: 1; }
+  .mode-btn.agent { background: var(--accent-soft); color: var(--accent); border-color: transparent; font-weight: 600; }
+  .mode-btn.chat { background: var(--accent-soft); color: var(--accent); border-color: transparent; font-weight: 600; }
+  /* / 命令浮层 */
+  .cmd-pop { position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); display: none; flex-direction: column; gap: 2px; padding: 6px; background: var(--surface); border: 1px solid var(--border-l1); border-radius: 12px; box-shadow: 0 8px 24px rgba(15, 17, 21, 0.10); z-index: 20; max-height: 240px; overflow: auto; }
+  .cmd-pop.open { display: flex; }
+  .cmd-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
+  .cmd-item:hover, .cmd-item.sel { background: var(--accent-soft); }
+  .cmd-icon { font-size: 14px; flex-shrink: 0; }
+  .cmd-name { font-weight: 600; font-size: 13px; flex-shrink: 0; }
+  .cmd-desc { margin-left: auto; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #chat-input { flex: 1; resize: none; height: 44px; padding: 10px 14px; border: 1px solid var(--border-l1); border-radius: 16px; font-size: 14px; font-family: inherit; background: var(--surface); color: var(--text); outline: none; }
   #chat-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(65, 118, 230, 0.12); }
   .send-btn { padding: 10px 22px; background: var(--accent); color: #fff; border: none; border-radius: 999px; cursor: pointer; font-weight: 600; font-size: 14px; white-space: nowrap; }
@@ -217,6 +232,7 @@ INDEX_HTML = """<!DOCTYPE html>
 <script>
 const state = {
   workspace: localStorage.getItem('agent.workspace') || '',
+  mode: localStorage.getItem('agent.mode') || 'agent',
   recents: (function () {
     try { return JSON.parse(localStorage.getItem('agent.recents') || '[]'); }
     catch (e) { return []; }
@@ -327,7 +343,25 @@ function enterMain() {
   document.getElementById('ws-name').textContent = state.workspace;
   buildLayout();
   loadSessions(state.workspace);
+  setMode(state.mode);
   closeManager();
+}
+
+function setMode(m) {
+  state.mode = m === 'chat' ? 'chat' : 'agent';
+  localStorage.setItem('agent.mode', state.mode);
+  const btn = document.getElementById('mode-toggle');
+  if (btn) {
+    btn.textContent = state.mode === 'agent' ? '🤖 Agent' : '💬 Chat';
+    btn.className = 'mode-btn ' + state.mode;
+    btn.title = state.mode === 'agent'
+      ? '当前 Agent 模式（可编辑文件）；点击切换到 chat 模式（只读）'
+      : '当前 chat 模式（只读，不可编辑文件）；点击切换到 Agent 模式';
+  }
+}
+
+function toggleMode() {
+  setMode(state.mode === 'chat' ? 'agent' : 'chat');
 }
 
 function openManager() {
@@ -559,15 +593,18 @@ function buildChat(containerId) {
       <div class="chat-hint">向 agent 发送编程任务，如「创建 hello.py 打印 Hello 并运行」</div>
     </div>
     <div id="chat-inputbar">
-      <textarea id="chat-input" placeholder="输入编程任务，Enter 发送（Shift+Enter 换行）"></textarea>
+      <button id="mode-toggle" class="mode-btn" onclick="toggleMode()" title="切换模式"></button>
+      <div class="input-wrap">
+        <div id="cmd-pop" class="cmd-pop"></div>
+        <textarea id="chat-input" placeholder="输入编程任务，Enter 发送（Shift+Enter 换行）；输入 / 选择命令"></textarea>
+      </div>
       <button class="send-btn" onclick="sendTask()">发送</button>
     </div>`;
   chatMessages.forEach(m => appendMsg(m.role, m.raw, m.trace));
   const h = document.getElementById('chat-history');
   h.scrollTop = h.scrollHeight;
-  document.getElementById('chat-input').addEventListener('keydown', function (e) {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendTask(); }
-  });
+  setMode(state.mode);
+  buildCmdPop();
 }
 
 function appendMsg(role, raw, trace) {
@@ -876,6 +913,15 @@ function handleEvent(ev, t) {
       cb.body.textContent = ev.summary || '';
       break;
     }
+    case 'plan': {
+      const pb = createTblk(t.traceEl, 'note');
+      pb.icon = pb.head.children[0];
+      pb.icon.textContent = '📐';
+      pb.title.textContent = '执行计划';
+      pb.summary.textContent = oneLine(ev.plan || '', 60);
+      pb.body.textContent = ev.plan || '';
+      break;
+    }
     case 'turn_end': {
       if (ev.interrupted) {
         const ib = createTblk(t.traceEl, 'warn');
@@ -1031,12 +1077,25 @@ function renderMarkdown(text) {
   return frag;
 }
 
-/* ---------- 斜杠命令（迭代 8 · 8.1：/goal 目标模式） ---------- */
+/* ---------- 斜杠命令（迭代 8 · 8.6：/goal /plan /chat） ---------- */
+const CMD_ITEMS = [
+  {cmd: '/goal', icon: '🎯', name: '/goal', desc: '目标模式：长任务自动续跑'},
+  {cmd: '/plan', icon: '📐', name: '/plan', desc: '先制定计划再执行'},
+];
+
 function parseCommand(text) {
   const t = text.trim();
   if (t === '/goal' || t.startsWith('/goal ')) {
     const rest = t === '/goal' ? '' : t.slice('/goal'.length).trim();
     return {cmd: 'goal', task: rest};
+  }
+  if (t === '/plan' || t.startsWith('/plan ')) {
+    const rest = t === '/plan' ? '' : t.slice('/plan'.length).trim();
+    return {cmd: 'plan', task: rest};
+  }
+  if (t === '/chat' || t.startsWith('/chat ')) {
+    const rest = t === '/chat' ? '' : t.slice('/chat'.length).trim();
+    return {cmd: 'chat', task: rest};
   }
   return {cmd: '', task: t};
 }
@@ -1047,13 +1106,86 @@ function flashHint(input, text) {
   setTimeout(function () { input.placeholder = old; }, 3000);
 }
 
+/* / 命令浮层：输入 / 弹出可选命令，↑↓ 导航、Enter 选择、Esc 关闭、点击插入 */
+function buildCmdPop() {
+  const pop = document.getElementById('cmd-pop');
+  const input = document.getElementById('chat-input');
+  if (!pop || !input) return;
+  let selIdx = 0;
+  const updateSel = function () {
+    const items = pop.children;
+    for (let i = 0; i < items.length; i++) {
+      items[i].className = 'cmd-item' + (i === selIdx ? ' sel' : '');
+    }
+  };
+  const render = function () {
+    const v = input.value;
+    if (v.startsWith('/') && !v.includes(' ') && !v.includes('\\n') && v.length <= 8) {
+      const items = CMD_ITEMS.filter(function (it) { return it.cmd.indexOf(v) === 0; });
+      if (items.length) {
+        pop.innerHTML = '';
+        selIdx = Math.min(selIdx, items.length - 1);
+        items.forEach(function (it, i) {
+          const row = document.createElement('div');
+          row.className = 'cmd-item' + (i === selIdx ? ' sel' : '');
+          const ic = document.createElement('span');
+          ic.className = 'cmd-icon';
+          ic.textContent = it.icon;
+          const nm = document.createElement('span');
+          nm.className = 'cmd-name';
+          nm.textContent = it.cmd;
+          const ds = document.createElement('span');
+          ds.className = 'cmd-desc';
+          ds.textContent = it.desc;
+          row.appendChild(ic);
+          row.appendChild(nm);
+          row.appendChild(ds);
+          row.onclick = function () {
+            input.value = it.cmd + ' ';
+            pop.classList.remove('open');
+            input.focus();
+          };
+          pop.appendChild(row);
+        });
+        pop.classList.add('open');
+        return;
+      }
+    }
+    pop.classList.remove('open');
+  };
+  input.addEventListener('input', render);
+  input.addEventListener('keydown', function (e) {
+    const open = pop.classList.contains('open');
+    const items = pop.children;
+    if (open && e.key === 'ArrowDown') { e.preventDefault(); selIdx = Math.min(selIdx + 1, items.length - 1); updateSel(); }
+    else if (open && e.key === 'ArrowUp') { e.preventDefault(); selIdx = Math.max(selIdx - 1, 0); updateSel(); }
+    else if (open && e.key === 'Escape') { pop.classList.remove('open'); }
+    else if (open && e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      const sel = items[selIdx];
+      if (sel) sel.onclick();
+    }
+    else if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendTask(); }
+  });
+  input.addEventListener('blur', function () {
+    setTimeout(function () { pop.classList.remove('open'); }, 150);
+  });
+}
+
 async function sendTask() {
   const input = document.getElementById('chat-input');
   const parsed = parseCommand(input.value);
   const task = parsed.task;
   const goalMode = parsed.cmd === 'goal';
+  const planMode = parsed.cmd === 'plan';
+  const chatCmd = parsed.cmd === 'chat';
+  let mode = state.mode;
+  if (chatCmd) mode = 'chat';
+  if (goalMode || planMode) mode = 'agent';  // /goal 与 /plan 仅 agent 模式
   if (!task) {
     if (goalMode) flashHint(input, '/goal 需要跟随任务，例如：/goal 实现用户登录功能');
+    if (planMode) flashHint(input, '/plan 需要跟随任务，例如：/plan 实现用户登录功能');
+    if (chatCmd) flashHint(input, '/chat 需要跟随问题，例如：/chat 解释什么是装饰器');
     return;
   }
   input.value = '';
@@ -1065,7 +1197,7 @@ async function sendTask() {
   const idx = chatMessages.length - 1;
   await ensureSession(task);
   saveMessages();
-  const es = new EventSource('/events?task=' + encodeURIComponent(task) + '&workdir=' + encodeURIComponent(state.workspace) + '&session=' + encodeURIComponent(currentSessionId || '') + (goalMode ? '&goal=1' : ''));
+  const es = new EventSource('/events?task=' + encodeURIComponent(task) + '&workdir=' + encodeURIComponent(state.workspace) + '&session=' + encodeURIComponent(currentSessionId || '') + '&mode=' + encodeURIComponent(mode) + (goalMode ? '&goal=1' : '') + (planMode ? '&plan=1' : ''));
   const t = newTurnState(agent.bubble, agent.traceEl);
   t.statusEl = agent.status;
   es.onmessage = function (e) {
@@ -1561,6 +1693,8 @@ class AgentHandler(BaseHTTPRequestHandler):
             return
         session_id = (query.get("session") or [None])[0]
         goal_mode = (query.get("goal") or ["0"])[0] in ("1", "true")
+        plan_mode = (query.get("plan") or ["0"])[0] in ("1", "true")
+        chat_mode = (query.get("mode") or ["agent"])[0] == "chat"
         session = None
         if session_id:
             try:
@@ -1591,9 +1725,24 @@ class AgentHandler(BaseHTTPRequestHandler):
                 with contextlib.redirect_stdout(_NullWriter()):
                     stream_cfg = dataclasses.replace(config, stream=True, goal=goal_mode)  # Web 恒流式
                     client = LLMClient(stream_cfg)
+                    task_run = task_effective
+                    run_tools = None  # agent 模式：全部工具
+                    run_mode = "agent"
+                    if chat_mode:
+                        run_mode = "chat"
+                        run_tools = tool_schemas_for(READ_ONLY_TOOL_NAMES)
+                    if plan_mode:
+                        try:
+                            plan = make_plan(client, task_run)
+                            if plan:
+                                q.put({"type": "plan", "plan": plan, "text": ""})
+                                task_run = f"{task_run}\n\n已制定的执行计划：\n{plan}\n请按计划逐步执行。"
+                        except Exception:  # noqa: BLE001 - 计划失败按无计划继续
+                            pass
                     result = run(
-                        stream_cfg, task_effective, workdir=workdir,
+                        stream_cfg, task_run, workdir=workdir,
                         client=client, emit=q.put, history=history,
+                        tools=run_tools, mode=run_mode,
                     )
                     # goal 状态持久化（仅在 goal 模式或恢复 open 会话时写入，避免普通对话覆盖）
                     goal_open = (session or {}).get("goal", {}).get("status") == "open"

@@ -5,8 +5,17 @@ import urllib.error
 from unittest import mock
 
 from agent.config import Config
-from agent.tools import TOOLS, dispatch, tool_schemas
+from agent.tools import TOOLS, dispatch, tool_schemas, tool_schemas_for
 from agent.tools.shell_tools import _decode, is_dangerous
+
+
+def test_tool_schemas_for_filters():
+    from agent.tools import READ_ONLY_TOOL_NAMES
+
+    ro = tool_schemas_for(READ_ONLY_TOOL_NAMES)
+    names = {s["function"]["name"] for s in ro}
+    assert names == READ_ONLY_TOOL_NAMES
+    assert len(tool_schemas_for()) == len(TOOLS)  # None 返回全部
 
 
 def test_nine_tools_registered():

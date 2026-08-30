@@ -381,13 +381,15 @@ def run(
     emit: Callable[[dict[str, Any]], None] | None = None,
     history: list[dict[str, Any]] | None = None,
     tools: list[dict[str, Any]] | None = None,
+    mode: str = "agent",
 ) -> str:
     """单次任务：构造 system + user(task)，跑一轮工具循环。可复用传入的 client。
 
     emit 为轨迹事件回调（Web 用）；为 None 时保持 CLI 打印行为。
     history 为前置对话（[{"role": "user"/"assistant", "content": ...}]），
     供 Web 同一会话内多轮上下文互通（参考 DSH 多轮设计）。
-    tools 为本次运行的工具集（None 用全部注册工具；子代理用受限集）。
+    tools 为本次运行的工具集（None 用全部注册工具；子代理/chat 模式用受限集）。
+    mode 为运行模式：agent（默认，全能力）或 chat（只读，不可修改文件）。
     """
     if client is None:
         client = LLMClient(config)
@@ -396,7 +398,14 @@ def run(
         emit(_event("turn_start", task=task))
         if config.goal:
             emit(_event("goal_start"))
-    messages: list[dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT}]
+    system = SYSTEM_PROMPT
+    if mode == "chat":
+        system += (
+            " 当前为 chat 模式：你只能读取与搜索（read_file/list_directory/"
+            "search_content/web_search），不能修改文件、执行命令或委派子代理；"
+            "请直接以对话方式回答。"
+        )
+    messages: list[dict[str, Any]] = [{"role": "system", "content": system}]
     if history:
         messages.extend(history)
     messages.append({"role": "user", "content": task})

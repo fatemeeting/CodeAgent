@@ -265,3 +265,12 @@
 - [x] AM1 真实冒烟 ×4：goal 完成（goal_end done + goal_demo.txt）、goal 受阻（goal_blocked + goal_end）、复合任务（todo×3 + web_search + delegate_subagent + sub_demo.txt）、web_search 直连，均以 [DONE] 收尾
 - [x] AM2 全量回归（pytest 123 全绿 / compileall / --help / REPL /quit）
 - [x] AM3 证据入 AGENT_LOG，迭代 8 放行
+
+## AN. 迭代 8 切片 8.6 chat/agent 双模式 + /plan 命令
+
+- [x] AN1 chat 模式只读工具集（不可编辑/执行/委派）+ agent 模式全工具；system prompt 明示约束；`run(mode=, tools=)` 与 `tool_schemas_for` 参数化
+- [x] AN2 顶栏模式切换（💬 Chat / 🤖 Agent + localStorage）；`/chat` 按条强制 chat、`/goal` `/plan` 强制 agent
+- [x] AN3 `/plan`：make_plan → `plan` 事件（📐 执行计划块）→ 计划注入执行；`/events` 增 mode/plan 参数
+- [x] AN4 测试（chat 工具集/prompt、plan 事件、命令解析、模式切换）+ 真实冒烟（chat 仅 list_directory、plan 事件 + 计划执行）
+- [x] AN5 输入框左侧模式切换按钮（🤖 Agent / 💬 Chat 胶囊，点击切换 + localStorage）；顶栏切换移除
+- [x] AN6 `/` 命令浮层：输入 `/` 弹出 `/plan`、`/goal` 选择栏（图标 + 描述 + 悬停高亮 + ↑↓/Enter/Esc 键盘导航 + 点击插入）
