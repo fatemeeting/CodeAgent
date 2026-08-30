@@ -250,9 +250,9 @@
 
 ## AK. 迭代 8 切片 8.3 subagent 工具
 
-- [ ] AK1 `delegate_subagent {task}`：子线程独立 run、短预算、不可再委托、摘要回填
-- [ ] AK2 事件 subagent_start/end + 前端嵌套轨迹块；并行复用工具并行执行
-- [ ] AK3 测试（返回/失败回填/并行）
+- [x] AK1 `delegate_subagent {task, name}`：子代理短预算 3 轮、不可再委托（工具集排除自身）、stdout 静默、摘要回填 ≤400 字；缺 task/配置缺失报错；`run(tools=)` 可选参数
+- [x] AK2 事件 subagent_start/end + 前端「🤖 子代理」嵌套折叠块（运行态扫光 → ✓/✗ + 摘要；重放可见）；并行复用工具并行执行
+- [x] AK3 测试（返回摘要/缺 task/缺配置 + loop 事件 + DOM 垫片）
 
 ## AL. 迭代 8 切片 8.4 上下文压缩
 

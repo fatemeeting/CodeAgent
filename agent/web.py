@@ -124,10 +124,12 @@ INDEX_HTML = """<!DOCTYPE html>
   @keyframes tblk-sweep { 0% { left: -300px; } 90%, 100% { left: 100%; } }
   @media (prefers-reduced-motion: reduce) { .tblk.running .tblk-head::after { display: none; animation: none; } }
   /* 展开正文：tool/note/err = 代码卡片；think = 标题下缩进文本 */
-  .tblk.tool .tblk-body, .tblk.note .tblk-body, .tblk.err .tblk-body, .tblk.todo .tblk-body { display: none; margin: 4px 0 4px 4px; padding: 12px 16px; max-height: 260px; overflow: auto; border: 1px solid rgba(0, 0, 0, 0.04); border-radius: 12px; background: #f9fafb; color: var(--text); font-family: Consolas, monospace; font-size: 12.5px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+  .tblk.tool .tblk-body, .tblk.note .tblk-body, .tblk.err .tblk-body, .tblk.todo .tblk-body, .tblk.sub .tblk-body { display: none; margin: 4px 0 4px 4px; padding: 12px 16px; max-height: 260px; overflow: auto; border: 1px solid rgba(0, 0, 0, 0.04); border-radius: 12px; background: #f9fafb; color: var(--text); font-family: Consolas, monospace; font-size: 12.5px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
   .tblk.think .tblk-body { display: none; padding: 4px 0 4px 22px; max-height: 260px; overflow: auto; color: var(--muted); font-size: 13px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
   .tblk.tool.ok .tblk-meta { color: var(--tblk-ok); }
   .tblk.tool.err .tblk-meta, .tblk.err .tblk-title, .tblk.err .tblk-icon { color: var(--tblk-err); }
+  .tblk.sub.ok .tblk-meta { color: var(--tblk-ok); }
+  .tblk.sub.err .tblk-meta { color: var(--tblk-err); }
   .tblk.note .tblk-body { color: var(--muted); }
   /* 回合统计行（模仿 DSH StatsLine） */
   .turn-stats { margin: 2px 0 6px; color: var(--muted); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -694,7 +696,7 @@ function newTurnState(bubble, traceEl) {
     think: null, pendingTools: [], traceEvents: [],
     steps: 0, toolMs: 0, statsEl: null,
     statusEl: null, connErr: false, done: false,
-    todoBlk: null,
+    todoBlk: null, pendingSubs: [],
   };
 }
 
@@ -843,6 +845,27 @@ function handleEvent(ev, t) {
       }).join('\\n');
       break;
     }
+    case 'subagent_start': {
+      const sb = createTblk(t.traceEl, 'sub');
+      sb.root.className = 'tblk sub running';
+      sb.icon = sb.head.children[0];
+      sb.icon.textContent = '🤖';
+      sb.title.textContent = '子代理 · ' + (ev.name || '子任务');
+      sb.summary.textContent = oneLine(ev.task || '', 60);
+      sb.meta.textContent = '执行中…';
+      t.pendingSubs.push(sb);
+      break;
+    }
+    case 'subagent_end': {
+      const sb = t.pendingSubs.shift();
+      if (sb) {
+        sb.root.className = 'tblk sub ' + (ev.ok ? 'ok' : 'err');
+        sb.meta.textContent = ev.ok ? '✓' : '✗';
+        sb.summary.textContent = oneLine(ev.summary || '', 60);
+        sb.body.textContent = ev.summary || '';
+      }
+      break;
+    }
     case 'turn_end': {
       if (ev.interrupted) {
         const ib = createTblk(t.traceEl, 'warn');
@@ -885,6 +908,10 @@ function renderTraceFromEvents(traceEl, events) {
   t.pendingTools.forEach(function (tb) {
     tb.root.className = 'tblk tool err';
     tb.meta.textContent = '（未完成）';
+  });
+  t.pendingSubs.forEach(function (sb) {
+    sb.root.className = 'tblk sub err';
+    sb.meta.textContent = '（未完成）';
   });
 }
 

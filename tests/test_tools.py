@@ -4,11 +4,12 @@ import sys
 import urllib.error
 from unittest import mock
 
+from agent.config import Config
 from agent.tools import TOOLS, dispatch, tool_schemas
 from agent.tools.shell_tools import _decode, is_dangerous
 
 
-def test_eight_tools_registered():
+def test_nine_tools_registered():
     names = {t.name for t in TOOLS}
     assert names == {
         "read_file",
@@ -19,6 +20,7 @@ def test_eight_tools_registered():
         "search_content",
         "web_search",
         "todo_write",
+        "delegate_subagent",
     }
 
 
@@ -227,6 +229,31 @@ def test_todo_write_caps_items(tmp_path):
 def test_todo_write_normalizes_status(tmp_path):
     out = dispatch("todo_write", {"todos": [{"id": "1", "content": "x", "status": "奇怪"}]}, str(tmp_path))
     assert "共 1 项" in out  # 非法状态回退 pending，不报错
+
+
+# ---------- delegate_subagent（迭代 8 · 8.3） ----------
+
+def test_delegate_subagent_runs_and_returns_summary(tmp_path):
+    from agent.tools.subagent_tools import set_subagent_config
+
+    cfg = Config(api_key="k", base_url="https://example.com", model="deepseek-chat", max_iterations=5)
+    set_subagent_config(cfg)
+    with mock.patch("agent.loop.run", return_value="子代理结果摘要"):
+        out = dispatch("delegate_subagent", {"task": "子任务", "name": "辅助"}, str(tmp_path))
+    assert out == "子代理完成：子代理结果摘要"
+
+
+def test_delegate_subagent_requires_task(tmp_path):
+    out = dispatch("delegate_subagent", {}, str(tmp_path))
+    assert "缺少 task" in out
+
+
+def test_delegate_subagent_requires_config(tmp_path):
+    from agent.tools.subagent_tools import set_subagent_config
+
+    set_subagent_config(None)
+    out = dispatch("delegate_subagent", {"task": "x"}, str(tmp_path))
+    assert "配置缺失" in out
 
 
 def test_web_search_parses_lite_layout(tmp_path):

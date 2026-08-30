@@ -9,6 +9,7 @@ from .file_tools import EDIT_FILE, READ_FILE, WRITE_FILE
 from .fs_tools import LIST_DIRECTORY, SEARCH_CONTENT
 from .search_tools import WEB_SEARCH
 from .shell_tools import EXECUTE_COMMAND
+from .subagent_tools import DELEGATE_SUBAGENT, set_subagent_config
 from .todo_tools import TODO_WRITE
 
 TOOLS: list[Tool] = [
@@ -20,6 +21,7 @@ TOOLS: list[Tool] = [
     SEARCH_CONTENT,
     WEB_SEARCH,
     TODO_WRITE,
+    DELEGATE_SUBAGENT,
 ]
 
 

@@ -783,3 +783,18 @@
   - 冒烟标记（`case 'todo'`/`t.todoBlk`/`.tblk.todo .tblk-body` 等）就位；`node --check` 通过
   - Node DOM 垫片：todo 块标题/`0/2` meta/▶☐ 行、第二次事件原位更新为 `1/1` + ☑、buildChat 重放清单块 → **JSFLOW 8.2 todo OK**
 - **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
+
+## 迭代 8 切片 8.3：subagent 工具（delegate_subagent + 嵌套轨迹）
+
+- **时间**：2026-08-30
+- **给 Agent 的任务**：切片 8.3——delegate_subagent 子代理工具（独立上下文子任务、摘要回填）+ 嵌套轨迹块
+- **Agent 修改了什么**：
+  - 新建 `agent/tools/subagent_tools.py`：`delegate_subagent {task, name}`——短预算 3 轮（`replace(cfg, max_iterations=3, goal=False, reflect=False, stream=False)`）、不可再委托（工具集排除自身）、stdout 捕获静默（仅返回摘要 ≤400 字）、失败回填错误观测；`set_subagent_config(config)` 注入当前配置（`run` 开始时设置；handler 内惰性 import loop/llm 避免循环导入）
+  - `agent/loop.py`：`run(tools=None)` 可选参数（子代理用受限集）；`subagent_start{name,task}` / `subagent_end{ok,summary}` 事件；SYSTEM_PROMPT 提及；注册为第 9 个工具
+  - `agent/web.py`：`handleEvent` 子代理分支——「🤖 子代理 · 名称」折叠块（运行态扫光「执行中…」→ ✓/✗ + 摘要入卡）；`.tblk.sub` 卡片样式与 ok/err 色；`pendingSubs` 回放兜底（未完成 → err）
+  - 测试：`test_tools.py` +3（返回摘要/缺 task/缺配置）、`test_loop.py` +1（subagent 事件）；patch 目标修正为 `agent.loop.run`（惰性导入）
+- **检查证据**：
+  - `pytest -q` → **121 passed**（117 + 4）
+  - 冒烟标记（`subagent_start`/`subagent_end`/`子代理 · ` 等）就位；`node --check` 通过
+  - Node DOM 垫片：运行态类/标题/「执行中…」、完成态 `tblk sub ok` + ✓ + 摘要、buildChat 重放子代理块 → **JSFLOW 8.3 subagent OK**
+- **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）

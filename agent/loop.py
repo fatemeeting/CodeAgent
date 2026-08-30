@@ -11,13 +11,14 @@ from .config import Config
 from .context import truncate_history
 from .llm import LLMClient
 from .parser import parse_response
-from .tools import dispatch, tool_schemas
+from .tools import dispatch, set_subagent_config, tool_schemas
 from .tools.shell_tools import is_dangerous
 
 SYSTEM_PROMPT = (
     "你是一个编程智能体（coding agent）。用户会给你一个编程任务。"
     "你可以使用工具读写文件、执行命令、列目录、搜索文件内容与网络信息（web_search），逐步完成任务。"
     "复杂多步任务可以使用 todo_write 工具维护任务清单并随进度更新。"
+    "独立的子问题可以交给 delegate_subagent 子代理在隔离上下文中执行。"
     "每次只执行一步，观察结果后再决定下一步。"
     "任务完成后直接给出简洁的最终总结，不要再调用工具。"
     "重要规则：写入代码文件的内容必须是纯代码，符合该语言的代码规范、可直接运行；"
@@ -214,6 +215,12 @@ def run_turn(
         for tc in parsed.tool_calls:
             if emit:
                 emit(_event("tool_call", step=step, name=tc.name, parameter=tc.arguments_raw or ""))
+                if tc.name == "delegate_subagent":
+                    emit(_event(
+                        "subagent_start",
+                        name=str(tc.arguments.get("name", "") or "子任务"),
+                        task=_brief(str(tc.arguments.get("task", "")), 60),
+                    ))
             else:
                 _log_tool_call(step, tc.name, tc.arguments)
 
@@ -286,6 +293,13 @@ def run_turn(
                             for t in todos
                             if isinstance(t, dict)
                         ]))
+                # 子代理结束事件
+                if tc.name == "delegate_subagent":
+                    emit(_event(
+                        "subagent_end",
+                        ok=not full_obs.startswith("错误"),
+                        summary=_brief(full_obs, 120),
+                    ))
             else:
                 _log_observation(observation)
             messages.append({"role": "tool", "tool_call_id": tc.id, "content": observation})
@@ -310,15 +324,18 @@ def run(
     client: LLMClient | None = None,
     emit: Callable[[dict[str, Any]], None] | None = None,
     history: list[dict[str, Any]] | None = None,
+    tools: list[dict[str, Any]] | None = None,
 ) -> str:
     """单次任务：构造 system + user(task)，跑一轮工具循环。可复用传入的 client。
 
     emit 为轨迹事件回调（Web 用）；为 None 时保持 CLI 打印行为。
     history 为前置对话（[{"role": "user"/"assistant", "content": ...}]），
     供 Web 同一会话内多轮上下文互通（参考 DSH 多轮设计）。
+    tools 为本次运行的工具集（None 用全部注册工具；子代理用受限集）。
     """
     if client is None:
         client = LLMClient(config)
+    set_subagent_config(config)  # 子代理据此派生受限配置
     if emit:
         emit(_event("turn_start", task=task))
         if config.goal:
@@ -328,7 +345,7 @@ def run(
         messages.extend(history)
     messages.append({"role": "user", "content": task})
     try:
-        return run_turn(client, config, messages, tool_schemas(), workdir, emit)
+        return run_turn(client, config, messages, tools or tool_schemas(), workdir, emit)
     finally:
         if emit:
             usage: dict[str, Any] = {}

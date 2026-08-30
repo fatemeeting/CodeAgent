@@ -527,3 +527,27 @@ def test_run_emits_todo_snapshot_event(tmp_path):
     todo_evs = [e for e in events if e["type"] == "todo"]
     assert len(todo_evs) == 1
     assert todo_evs[0]["todos"] == [{"id": "1", "content": "步骤A", "status": "in_progress"}]
+
+
+def test_run_emits_subagent_events(tmp_path):
+    """delegate_subagent 调用前后发 subagent_start/subagent_end 事件。"""
+    call = _tool_call("c1", "delegate_subagent", '{"task": "独立子任务", "name": "辅助"}')
+    responses = [_response(content=None, tool_calls=[call]), _response(content="完成")]
+    client = mock.Mock()
+
+    def chat_stream(messages, tools=None, on_content=None, on_reasoning=None, on_retry=None):
+        resp = responses.pop(0)
+        if on_content and resp.choices[0].message.content:
+            on_content(resp.choices[0].message.content)
+        return resp
+
+    client.chat_stream.side_effect = chat_stream
+    events = []
+    with mock.patch("agent.loop.LLMClient", return_value=client), mock.patch(
+        "agent.loop.run", return_value="子代理结果"
+    ):
+        run(_stream_config(), "任务", workdir=str(tmp_path), emit=events.append)
+    starts = [e for e in events if e["type"] == "subagent_start"]
+    ends = [e for e in events if e["type"] == "subagent_end"]
+    assert len(starts) == 1 and starts[0]["name"] == "辅助" and "独立子任务" in starts[0]["task"]
+    assert len(ends) == 1 and ends[0]["ok"] is True and "子代理结果" in ends[0]["summary"]
