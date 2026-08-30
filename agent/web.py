@@ -134,6 +134,8 @@ INDEX_HTML = """<!DOCTYPE html>
   /* 重试行（迭代 7 · 7.5） */
   .tblk.retry .tblk-icon, .tblk.retry .tblk-title { color: var(--warn); }
   .tblk.retry .tblk-head { cursor: default; }
+  .tblk.warn .tblk-icon, .tblk.warn .tblk-title { color: var(--warn); }
+  .tblk.warn .tblk-head { cursor: default; }
   .tblk.tool.warn .tblk-meta { color: var(--warn); }
   /* 回合状态指示（迭代 7 · 7.5） */
   .turn-status { margin-left: 6px; font-size: 12px; color: var(--caption); }
@@ -285,6 +287,10 @@ function confirmWorkspace() {
   state.recents = [path, ...state.recents.filter(r => r !== path)].slice(0, 8);
   localStorage.setItem('agent.workspace', path);
   localStorage.setItem('agent.recents', JSON.stringify(state.recents));
+  // 切换工作区：会话归属工作区——重置当前会话与对话
+  currentSessionId = null;
+  firstTask = null;
+  chatMessages = [];
   enterMain();
 }
 
@@ -318,7 +324,7 @@ function enterMain() {
   document.getElementById('main').style.display = 'flex';
   document.getElementById('ws-name').textContent = state.workspace;
   buildLayout();
-  loadSessions();
+  loadSessions(state.workspace);
   closeManager();
 }
 
@@ -342,9 +348,10 @@ let sessionSaving = false;
 let savePending = false;
 let firstTask = null;
 
-async function loadSessions() {
+async function loadSessions(ws) {
   try {
-    const resp = await fetch('/sessions');
+    const wsArg = ws !== undefined ? ws : state.workspace;
+    const resp = await fetch('/sessions?workspace=' + encodeURIComponent(wsArg || ''));
     const data = await resp.json();
     if (!data.ok) return;
     const sel = document.getElementById('sess-select');
@@ -356,6 +363,10 @@ async function loadSessions() {
       opt.textContent = s.name || s.id;
       sel.appendChild(opt);
     });
+    // 当前会话不属于该工作区时自动置空（会话归属工作区）
+    if (currentSessionId && !data.sessions.some(function (s) { return s.id === currentSessionId; })) {
+      currentSessionId = null;
+    }
     sel.value = currentSessionId || '';
   } catch (e) { /* 忽略 */ }
 }
@@ -371,7 +382,7 @@ async function ensureSession(task) {
     const data = await resp.json();
     if (data.ok && data.session) {
       currentSessionId = data.session.id;
-      await loadSessions();
+      await loadSessions(state.workspace);
     }
   } catch (e) { /* 忽略 */ }
 }
@@ -389,7 +400,9 @@ async function switchSession(id) {
     localStorage.setItem('agent.workspace', state.workspace);
     document.getElementById('ws-name').textContent = state.workspace;
     chatMessages = (s.messages || []).map(function (m) { return {role: m.role, raw: m.raw, trace: m.trace}; });
+    markInterruptedTurn();  // 上次中断的末轮打标记
     buildChat('pane-right');
+    loadSessions(s.workspace);  // 会话归属工作区：下拉仅显示本工作区会话
     loadTree();
     refreshFiles();
   } catch (e) { /* 忽略 */ }
@@ -770,7 +783,9 @@ function handleEvent(ev, t) {
       break;
     }
     case 'error': {
-      const eb = createTblk(t.traceEl, 'err');
+      const kind = ev.severity === 'warn' ? 'warn' : 'err';
+      const eb = createTblk(t.traceEl, kind);
+      eb.head.onclick = kind === 'warn' ? null : eb.head.onclick;
       eb.icon = eb.head.children[0];
       eb.icon.textContent = '⚠️';
       eb.title.textContent = ev.severity || 'error';
@@ -789,6 +804,14 @@ function handleEvent(ev, t) {
       break;
     }
     case 'turn_end': {
+      if (ev.interrupted) {
+        const ib = createTblk(t.traceEl, 'warn');
+        ib.head.onclick = null;
+        ib.icon = ib.head.children[0];
+        ib.icon.textContent = '⚠️';
+        ib.title.textContent = '上次中断';
+        ib.summary.textContent = '上次运行在此中断，未完成';
+      }
       if (!t.answerRaw.trim() && !t.traceEvents.some(function (x) { return x.type === 'tool_result'; })) {
         setBubbleRaw(t.bubble, '（无回复）');
       }
@@ -823,6 +846,16 @@ function renderTraceFromEvents(traceEl, events) {
     tb.root.className = 'tblk tool err';
     tb.meta.textContent = '（未完成）';
   });
+}
+
+/* 中断轮次标记（对齐 DSH interrupted closer）：末轮 trace 无 turn_end 时补标记 */
+function markInterruptedTurn() {
+  const last = chatMessages[chatMessages.length - 1];
+  if (!last || last.role !== 'agent' || !last.trace || !last.trace.length) return;
+  const hasEnd = last.trace.some(function (e) { return e.type === 'turn_end'; });
+  if (!hasEnd) {
+    last.trace = last.trace.concat([{type: 'turn_end', text: '', interrupted: true}]);
+  }
 }
 
 function renderBubble(bubble) {
@@ -1573,7 +1606,9 @@ class AgentHandler(BaseHTTPRequestHandler):
         parts = [p for p in urllib.parse.urlparse(self.path).path.split("/") if p]
         try:
             if len(parts) == 1:
-                result = {"ok": True, "sessions": self._sessions().list_sessions()}
+                query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+                workspace = (query.get("workspace") or [None])[0]
+                result = {"ok": True, "sessions": self._sessions().list_sessions(workspace)}
             elif len(parts) == 2:
                 session = self._sessions().get_session(parts[1])
                 result = (

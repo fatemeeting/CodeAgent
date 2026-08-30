@@ -678,3 +678,32 @@
   - 冒烟标记（前端 `&session=`、后端 `history=history`/`_history_from_session`）就位；`node --check` 通过
   - Node DOM 垫片：EventSource URL 携带 session 参数 + 正常答复定稿 → **JSFLOW 会话参数 OK**
 - **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
+
+## 迭代 7 切片 7.5 修复 3：会话归属工作区
+
+- **时间**：2026-08-29
+- **给 Agent 的任务**（用户反馈）：session 应属于工作区，不应在每个工作区都显示所有 session；参考开源实现修改
+- **参考实现**：Cursor / Claude Code / OpenHands 的会话均按工作区（项目目录）隔离
+- **Agent 修改了什么**：
+  - `agent/sessions.py`：新增 `_normalize_ws`（反斜杠→正斜杠、去尾分隔符、Windows 忽略大小写）；`list_sessions(workspace=None)` 按归一化工作区过滤（None 返回全部，兼容旧调用）
+  - `agent/web.py`：`GET /sessions?workspace=<路径>` 解析查询参数并透传过滤；前端 `loadSessions(ws)` 带 workspace 拉取、当前会话不属于该工作区时自动置空；`confirmWorkspace` 切换工作区时重置当前会话引用与对话；切换/新建/重命名/删除会话均按当前工作区刷新下拉
+  - 测试：`test_sessions.py` +2（工作区过滤、路径归一化）；`test_web.py` +1（HTTP 过滤往返）
+- **检查证据**：
+  - `pytest -q` → **95 passed**（92 + 3 新增）
+  - 冒烟标记（前端 `fetch('/sessions?workspace='`/自动置空、后端 `_normalize_ws`/`list_sessions(workspace`/查询解析）就位；`node --check` 通过
+  - Node DOM 垫片：`loadSessions('E:/demoA')` → URL 精确为 `/sessions?workspace=E%3A%2FdemoA`、异工作区会话自动置空、下拉仅含本工作区会话 → **JSFLOW 工作区会话 OK**
+- **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
+
+## 迭代 7 切片 7.5 修复 4：DSH 对齐（工作区物理分层 + 中断轮次标记）
+
+- **时间**：2026-08-29
+- **给 Agent 的任务**：参考 DSH `session-persistence-jsonl` 磁盘布局做低成本对齐——① 存储按工作区物理分层；② 中断轮次标记
+- **Agent 修改了什么**：
+  - `agent/sessions.py`：布局改为 `data/sessions/<ws-slug>/<id>.json`（`_ws_slug` = 归一化工作区安全目录名 + 8 位 md5 防碰撞）；`__init__` 自动迁移旧平铺 `<id>.json`（保守：失败保留旧文件，`_session_path` 优先识别平铺文件兼容读取）；新增 `_id_exists` **全局唯一** id 检查（过程中发现并修复真 bug：分层后 id 碰撞检查缩小为工作区内，不同工作区同秒创建会话 id 相撞、索引互相覆盖）
+  - `agent/web.py`：`markInterruptedTurn`——重放会话时末轮 trace 无 `turn_end` 则追加 `turn_end{interrupted:true}`；`handleEvent` turn_end 渲染琥珀「上次中断 · 上次运行在此中断，未完成」warn 行；error 事件 severity=warn 渲染琥珀 warn 行（error 红 / warn 琥珀分级，`.tblk.warn` CSS）
+  - 测试：`test_sessions.py` +3（分层布局、工作区目录隔离、旧平铺迁移）；既有 id 碰撞回归覆盖
+- **检查证据**：
+  - `pytest -q` → **98 passed**（95 + 3 新增；修复 id 全局唯一 bug 后全绿）
+  - 冒烟标记（`markInterruptedTurn`/`ev.interrupted`/`.tblk.warn` 等）就位；`node --check` 通过
+  - Node DOM 垫片：中断末轮追加标记并渲染 1 个琥珀块、完整 trace 不追加、error warn 分级为 warn 块 → **JSFLOW 中断标记 OK**
+- **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）

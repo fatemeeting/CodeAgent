@@ -1,20 +1,17 @@
-# gate-checklist.md — 迭代 7 · 切片 7.5 放行清单
+# gate-checklist.md — 迭代 7 · 切片 7.5 修复 3 放行清单
 
-> 当前阶段：迭代 7 · 切片 7.5（错误处理与状态指示）。放行决定：通过 / 重试 / 降级 / 停止。
+> 当前阶段：迭代 7 · 切片 7.5 修复 3（工作区物理分层 + 中断轮次标记）。放行决定：通过 / 重试 / 降级 / 停止。
 
 ## 必过项
 
-- [x] `on_retry` 回调 → `retry` 事件 → 前端 `↻ 重试 n/m · 原因` 行
-- [x] error 事件 severity/retryable；参数 JSON 解析失败不执行 + 事件化 + 回填观测
-- [x] `tool_result.exit_code`（execute_command 观测提取）；前端 0 绿 / 非零琥珀 ⚠ / 错误红 ✗
-- [x] SSE 断线：关闭流 + 「连接中断，请重新发送任务」行（去重）
-- [x] 回合状态指示（思考中…/调用工具…/回答中…/完成/出错）
-- [x] `pytest -q` 全绿（88）；`node --check`；DOM 垫片；冒烟标记
+- [x] `data/sessions/<ws-slug>/<id>.json` 物理分层；旧平铺文件初始化自动迁移；兼容读取（旧文件未迁移成功仍可读）
+- [x] 重放末轮无 `turn_end` → 追加 `turn_end{interrupted}` → 琥珀「上次中断」行；error severity=warn 琥珀分级
+- [x] `pytest -q` 全绿（98）；`node --check`；DOM 垫片；冒烟标记
 
 ## 证据位置
 
-- 检查证据：见 `docs/AGENT_LOG.md` 迭代 7 切片 7.5 条目
-- 代码：`agent/llm.py`、`agent/loop.py`、`agent/web.py`、测试
+- 检查证据：见 `docs/AGENT_LOG.md` 迭代 7 切片 7.5 修复 3 条目
+- 代码：`agent/sessions.py`、`agent/web.py`、`tests/test_sessions.py`
 
 ## 退出决定
 

@@ -219,6 +219,9 @@
 - [x] AF3 非零退出码/超时染色；参数解析失败事件化；回合状态指示
 - [x] AF4 SSE 正常结束误报修复：`t.done` 标记（EOF onerror 不再误报断线）+ 事件序列化防御（TypeError 降级为错误帧）
 - [x] AF5 同会话上下文互通：`run(history=)` + `/events?session=` 加载会话历史注入本轮（跳过空占位/剔除当前任务防重复）；超长历史按 max_context_tokens 截断；无 session 参数不回归
+- [x] AF6 会话归属工作区：`list_sessions(workspace=)` 归一化过滤 + `GET /sessions?workspace=`；前端下拉只显示当前工作区会话，切换工作区重置会话引用
+- [x] AF7 存储物理分层：`data/sessions/<ws-slug>/<id>.json`（slug + md5 防碰撞，id 全局唯一检查）；旧平铺文件初始化自动迁移；兼容读取
+- [x] AF8 中断轮次标记：重放无 turn_end 的末轮追加 `turn_end{interrupted}` → 琥珀「上次中断」行；error severity=warn 琥珀分级
 
 ## AG. 迭代 7 切片 7.6 集成回归
 

@@ -440,3 +440,39 @@ def test_web_sse_uses_session_history(tmp_path):
     assert msgs[2]["content"] == "之前的答复"
     assert msgs[-1]["content"] == "现在的问题"
     assert "完成" in raw and "[DONE]" in raw
+
+
+def test_web_sessions_filter_by_workspace(tmp_path):
+    """GET /sessions?workspace= 仅返回该工作区的会话（会话归属工作区）。"""
+    server = ThreadingHTTPServer(("127.0.0.1", 0), AgentHandler)
+    server.config = _config()
+    server.workdir = "."
+    server.sessions = SessionStore(tmp_path / "data" / "sessions")
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = server.server_address[1]
+    base = f"http://127.0.0.1:{port}"
+
+    def post(path, payload):
+        req = urllib.request.Request(
+            base + path,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+
+    def get(path):
+        with urllib.request.urlopen(base + path) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+
+    try:
+        a = post("/sessions", {"workspace": "E:/demoA", "name": "A"})["session"]
+        post("/sessions", {"workspace": "E:/demoB", "name": "B"})
+        r = get("/sessions?workspace=" + urllib.parse.quote("E:/demoA"))
+        assert r["ok"] is True
+        assert [s["id"] for s in r["sessions"]] == [a["id"]]
+        assert len(get("/sessions")["sessions"]) == 2  # 无参数返回全部
+    finally:
+        server.shutdown()
+        server.server_close()

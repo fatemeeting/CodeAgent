@@ -196,3 +196,18 @@ coding-agent/
 1. **根因**：`/events` 每次 `run()` 均从 `[system, user(task)]` 全新开始，会话历史未传给模型（CLI REPL 有历史，Web 没有）。
 2. **修复（参考 DSH 多轮设计）**：`run()` 增可选 `history`（前置对话消息）；`/events` 接受 `session` 参数 → 从 `SessionStore` 加载该会话消息 → `_history_from_session` 转换（跳过空占位、剔除与当前任务相同的最后一条用户消息防重复）→ 注入本轮；前端 EventSource URL 携带当前会话 id；无 session 参数时行为不变（旧调用兼容）。
 3. **审计顺带确认**：消息保存有 pending 队列（保存与读取竞态安全：先存后读剔除当前任务，未存则 run 自增，均不重复）；`truncate_history` 对注入历史同样生效（token 预算保护）。
+
+## 25. 迭代 7 · 切片 7.5 修复 2（会话归属工作区）
+
+> 参考 Cursor / Claude Code / OpenHands 的工作区级会话隔离：会话列表只显示当前工作区的会话。
+
+1. **后端**：`SessionStore.list_sessions(workspace=None)` 增工作区过滤（`_normalize_ws`：反斜杠→正斜杠、去尾分隔符、Windows 忽略大小写）；`GET /sessions?workspace=<路径>` 透传；无参数返回全部（旧调用兼容）。
+2. **前端**：`loadSessions(ws)` 带 `workspace` 参数拉取；当前会话不属于该工作区时自动置空（下拉回「（新会话）」）；切换工作区（管理器确认）时重置当前会话引用与对话；切换会话 / 新建 / 重命名 / 删除均按当前工作区刷新下拉；新建会话仍绑定当前工作区。
+
+## 26. 迭代 7 · 切片 7.5 修复 3（DSH 对齐：工作区物理分层 + 中断轮次标记）
+
+> 依据 DSH `session-persistence-jsonl` 磁盘布局（`<root>/<normalized-cwd>/<encoded-id>/session.jsonl`）做低成本的等价简化。
+
+1. **存储物理分层**：`data/sessions/<ws-slug>/<id>.json`（slug = 归一化工作区安全目录名 + 8 位 md5 防碰撞）；根 `index.json` 不变（仍带 workspace 字段）；旧版平铺 `<id>.json` 在 `SessionStore` 初始化时自动迁移到工作区目录（迁移失败保留旧文件，读取走兼容路径）；`_session_path` 优先识别旧平铺文件（兼容），否则按 index 中的 workspace 定位。
+2. **中断轮次标记**：切换/重放会话时，若最后一条 agent 消息的 trace 无 `turn_end` → 前端追加 `turn_end {interrupted: true}` 事件，轨迹渲染琥珀「上次中断 · 上次运行在此中断，未完成」行（对齐 DSH 的 interrupted closer 语义）；error 事件 severity=warn 渲染为琥珀 warn 行（error 红 / warn 琥珀分级）。
+3. **不做**（超需求）：zstd 压缩、SQLite 后端、write-behind 批次、fsync 持久性保证。
