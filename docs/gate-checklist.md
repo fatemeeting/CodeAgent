@@ -1,17 +1,17 @@
-# gate-checklist.md — 迭代 9 · 修复切片 2 放行清单
+# gate-checklist.md — 迭代 9 · 修复切片 3 放行清单
 
-> 当前阶段：迭代 9 · 修复切片 2（命令组合与模式互斥）。放行决定：通过 / 重试 / 降级 / 停止。
+> 当前阶段：迭代 9 · 修复切片 3（任意位置输入 / 弹出浮层）。放行决定：通过 / 重试 / 降级 / 停止。
 
 ## 必过项
 
-- [x] `/skill` 与 `/goal`/`/plan`/`/chat` 任意顺序组合；`/goal` 与 `/plan` 互斥取先出现者
-- [x] 技能栏点选可追加到已有命令输入；浮层支持非开头 `/skill` 位置
+- [x] 任意位置（含句中）输入 `/` 即弹浮层；按光标前最后一个 `/` 起的词过滤
+- [x] 选择命令/技能只替换当前词，前置命令与后随任务保留
 - [x] `pytest -q`（146）、`node --check`、无头垫片、真实服务冒烟
 
 ## 证据位置
 
-- 检查证据：见 `docs/AGENT_LOG.md` 迭代 9 修复切片 2 条目
-- 代码：`agent/web.py`（parseCommand/sendTask/浮层/点选）
+- 检查证据：见 `docs/AGENT_LOG.md` 迭代 9 修复切片 3 条目
+- 代码：`agent/web.py`（buildCmdPop render/onclick/act）
 
 ## 退出决定
 

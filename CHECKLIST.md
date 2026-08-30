@@ -306,6 +306,12 @@
 - [x] AU2 `/goal` 与 `/plan` 互斥：同时出现只生效先出现的一个
 - [x] AU3 技能栏点选可追加到已有命令输入（如 `/goal 任务 /skill a` 追加 b）；回归（pytest/node/垫片/真实冒烟）
 
+## AV. 迭代 9 修复 3（任意位置输入 / 弹出浮层）
+
+- [x] AV1 每次输入 `/`（任意位置，含句中）都弹出命令浮层；按光标前最后一个 `/` 起的当前词过滤命令
+- [x] AV2 浮层选择只替换当前词（保留前置命令与后随任务）；`/skill` 词同样就地更新
+- [x] AV3 回归：pytest、node --check、无头垫片、真实冒烟
+
 ## AR. 迭代 9 切片 9.4 内置技能
 
 - [x] AR1 内置 python-testing / code-review / web-frontend（SKILL.md + 资源）

@@ -989,3 +989,18 @@
   - `node --check` EXIT=0；无头 DOM 垫片 **21/21 PASS**（组合解析顺/逆序、互斥先出现者生效 ×2、chat+skill、多技能+任务、裸 /skill、/skills 不误判、普通任务、URL goal+skill/chat+skill/plan+skill/默认话术 ×4、点选追加 ×4、非开头 /skill 浮层 ×3）
   - 真实冒烟：`/events?task=…&goal=1&skill=python-testing` → `goal_start` + `goal_end` + `skill_loaded` 三事件齐备、[DONE] 收尾，答复体现 python-testing 规范（组合模式端到端生效）
 - **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
+
+## 迭代 9 修复切片 3：任意位置输入 / 弹出浮层
+
+- **时间**：2026-08-30
+- **用户反馈**：希望**每一次输入 `/`**（任意位置，含句中）都能弹出上拉栏；原逻辑只认输入开头且整句无空格
+- **Agent 修改了什么**（仅前端 `agent/web.py`）：
+  - `buildCmdPop` 新增 `cursorPos`/`currentWord`：取光标前最后一个 `/` 起的「当前词」——不再要求整句以 `/` 开头
+  - `render` 重写判定：当前词是 `/skill` 变体 → 技能列表（☑ 多选）；其它无空格词匹配命令前缀（`/` `/g` `/go` `/p` 等）→ 命令列表；词内含空格/换行或不匹配 → 收起；`/skills` 不误判
+  - 命令项 onclick 与技能项 act 改为**词级替换**：只替换当前词，前置命令与后随任务原样保留（如「写代码 /go」选 `/goal` → 「写代码 /goal 」；「/goal 任务 /skill 」点技能 → 「/goal 任务 /skill python-testing 」）
+  - 语义边界如实记录：URL 中的 `/` 也会触发浮层（可 Esc 关闭），符合「每一次输入 / 都弹出」
+- **检查证据**：
+  - `pytest -q` → **146 passed**；`compileall` EXIT=0
+  - `node --check` EXIT=0；无头 DOM 垫片 **22/22 PASS**（句中 `/`、`/go` 过滤、词级替换 ×4、已有命令后再 `/`、句中 `/skill`、任务文本收起、URL 斜杠、开头 `/`、`/s` 过滤、CMD_ITEMS、组合解析/互斥/`/skills` 不误判、URL goal+skill/chat+skill、技能栏追加）
+  - 真实服务冒烟（127.0.0.1:8898）：页面含 `cmd-pop` 元素、`currentWord` 词级逻辑、`renderSkillItems` 技能浮层逻辑
+- **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）

@@ -1394,20 +1394,31 @@ function buildCmdPop() {
       items[i].className = 'cmd-item' + (i === selIdx ? ' sel' : '');
     }
   };
+  /* 光标位置与光标前最后一个 / 起的当前词 */
+  const cursorPos = function () {
+    return typeof input.selectionEnd === 'number' ? input.selectionEnd : input.value.length;
+  };
+  const currentWord = function () {
+    const pos = cursorPos();
+    const upto = input.value.slice(0, pos);
+    const ls = upto.lastIndexOf('/');
+    return {upto: upto, pos: pos, ls: ls, word: ls === -1 ? '' : upto.slice(ls)};
+  };
   const render = function () {
-    const v = input.value;
-    // 输入中最后一个 /skill 指令 → 列出技能（已选打 ☑；带任务文本后收起）
-    const idx = lastSkillIndex(v);
-    if (idx !== -1) {
-      const after = v.slice(idx + '/skill'.length).trim();
+    const cw = currentWord();
+    const word = cw.word;
+    if (cw.ls === -1) { pop.classList.remove('open'); return; }
+    // /skill 词 → 技能列表（已选打 ☑；带任务文本后收起）
+    if (word === '/skill' || word.startsWith('/skill ')) {
+      const after = word.slice('/skill'.length).trim();
       if (!after.includes(' ')) {
-        const curNames = after.split(',').map(function (x) { return x.trim(); }).filter(Boolean);
-        renderSkillItems(curNames);
+        renderSkillItems(after.split(',').map(function (x) { return x.trim(); }).filter(Boolean));
         return;
       }
     }
-    if (v.startsWith('/') && !v.includes(' ') && !v.includes('\\n') && v.length <= 8) {
-      const items = CMD_ITEMS.filter(function (it) { return it.cmd.indexOf(v) === 0; });
+    // 其它命令词：无空格/换行且与命令前缀匹配
+    if (!word.includes(' ') && !word.includes('\\n') && word.length <= 8) {
+      const items = CMD_ITEMS.filter(function (it) { return it.cmd.indexOf(word) === 0; });
       if (items.length) {
         pop.innerHTML = '';
         selIdx = Math.min(selIdx, items.length - 1);
@@ -1427,7 +1438,9 @@ function buildCmdPop() {
           row.appendChild(nm);
           row.appendChild(ds);
           row.onclick = function () {
-            input.value = it.cmd + ' ';
+            // 只替换当前词：保留前置命令与后随任务
+            const cw2 = currentWord();
+            input.value = cw2.upto.slice(0, cw2.ls) + it.cmd + ' ' + input.value.slice(cw2.pos);
             render();  // /skill 会进入技能列表；其余命令因含空格自然收起
             input.focus();
           };
@@ -1450,14 +1463,21 @@ function buildCmdPop() {
       skills.forEach(function (s) {
         const selected = selNames.indexOf(s.name) !== -1;
         rows.push({icon: selected ? '☑' : '📘', name: s.name, desc: (s.description || '') + (s.source !== 'workspace' ? ' · 只读' : ''), act: function () {
-          // 在输入中最后一个 /skill 指令处更新选择（保留前置命令与后随任务）
-          const cur = input.value;
-          const i = lastSkillIndex(cur);
-          const after = i === -1 ? '' : cur.slice(i + '/skill'.length).trim();
-          const curNames = after.split(',').map(function (x) { return x.trim(); }).filter(Boolean);
-          const k = curNames.indexOf(s.name);
-          if (k === -1) { curNames.push(s.name); } else { curNames.splice(k, 1); }
-          input.value = (i === -1 ? '' : cur.slice(0, i)) + '/skill ' + curNames.join(',') + ' ';
+          // 在光标前最后一个 /skill 词处就地更新（保留前置命令与后随任务）
+          const cw2 = currentWord();
+          const u2 = cw2.upto;
+          const i = lastSkillIndex(u2);
+          let prefix;
+          if (i !== -1) {
+            const after = u2.slice(i + '/skill'.length).trim();
+            const curNames = after.split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+            const k = curNames.indexOf(s.name);
+            if (k === -1) { curNames.push(s.name); } else { curNames.splice(k, 1); }
+            prefix = u2.slice(0, i) + '/skill ' + curNames.join(',') + ' ';
+          } else {
+            prefix = u2 + ' /skill ' + s.name + ' ';
+          }
+          input.value = prefix + input.value.slice(cw2.pos);
           input.focus();
           render();
         }});
