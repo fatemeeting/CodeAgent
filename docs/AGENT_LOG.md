@@ -707,3 +707,21 @@
   - 冒烟标记（`markInterruptedTurn`/`ev.interrupted`/`.tblk.warn` 等）就位；`node --check` 通过
   - Node DOM 垫片：中断末轮追加标记并渲染 1 个琥珀块、完整 trace 不追加、error warn 分级为 warn 块 → **JSFLOW 中断标记 OK**
 - **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
+
+## 迭代 7 切片 7.6：集成回归（迭代 7 收尾）
+
+- **时间**：2026-08-30
+- **给 Agent 的任务**：迭代 7 集成回归——真实任务冒烟 ×2 + 全量旧功能回归 + 证据收尾
+- **检查证据**：
+  - **AG1 真实任务冒烟**（真实 DeepSeek API，经 `/events` 事件流端到端，凭据由应用自身加载未读取）：
+    - 正常路径「创建 hello.py 打印 Hello 并运行验证」：事件流 `turn_start → round_end → tool_call → tool_result → … → 流式 content_delta → round_end → turn_end → [DONE]`；`hello.py` 落盘且含 Hello；最终答复确认运行输出 `Hello` ✓
+    - 错误路径「执行不存在的命令」：`tool_result (execute_command, exit_code=1)` 失败信号正确；`[DONE]` 仍正常收尾 ✓
+  - **AG2 回归**：`pytest -q` → **98 passed**；`compileall` EXIT=0；`--help` EXIT=0；REPL `/quit` 正常退出（`[.] >> 再见。`）；Web 端点（会话 CRUD/过滤/历史注入/保存文件/SSE 增量）测试全绿
+- **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
+
+## 迭代 7 总结（发布追踪）
+
+- 交付：会话持久化（7.1 JSON 后端 → 7.2 前端管理 → 工作区归属 + 物理分层）、轨迹可视化（7.3 事件化后端 + think 捕获 + 模型切换 → 7.4 内联折叠轨迹块 + DSH 视觉/色调 → 7.5 错误处理与状态指示 + 同会话上下文互通）、若干体验修复（字体/滚动/流式/乱码/缩放/布局）
+- 测试规模：**98 passed**（全程 mock LLM 免 key）+ 2 次真实任务冒烟；前端以 `node --check` + Node DOM 垫片（JSFLOW 系列）验证
+- 已知边界（如实记录）：Web 单次任务无断点续传（断线=重发任务）；无 zstd/SQLite/write-behind/fsync（超需求未做）；「对话|轨迹」Tab 全景视图留待迭代 8
+- 未提交变更由用户管理仓库

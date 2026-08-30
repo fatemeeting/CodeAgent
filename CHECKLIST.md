@@ -225,6 +225,6 @@
 
 ## AG. 迭代 7 切片 7.6 集成回归
 
-- [ ] AG1 真实任务冒烟 ×2（正常 + 错误路径）
-- [ ] AG2 CLI/REPL/会话/保存/滚动旧功能回归
-- [ ] AG3 证据入 AGENT_LOG，CHECKLIST 迭代 7 全勾选放行
+- [x] AG1 真实任务冒烟 ×2（正常 + 错误路径）：正常路径事件流 turn_start→工具→流式答复→turn_end→[DONE]，hello.py 创建并运行验证；错误路径 execute_command exit_code=1 失败信号正确、[DONE] 仍收尾
+- [x] AG2 CLI/REPL/会话/保存/滚动旧功能回归：pytest 98 全绿、compileall、--help、REPL /quit、Web 端点测试
+- [x] AG3 证据入 AGENT_LOG，CHECKLIST 迭代 7 全勾选放行
