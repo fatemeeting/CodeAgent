@@ -30,11 +30,20 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--plan", action="store_true", help="执行前先生成分步计划")
     parser.add_argument("--confirm", action="store_true", help="危险命令执行前人工确认")
     parser.add_argument("--goal", action="store_true", help="目标模式：长目标自动续跑，受阻或连续无进展才终止")
+    parser.add_argument("--skill", action="append", help="显式装载技能（可重复，按 name）")
+    parser.add_argument("--list-skills", action="store_true", help="列出可用技能并退出（无需 API key）")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.list_skills:
+        from .skills import load_skills, skill_summary
+
+        for s in skill_summary(load_skills(args.workdir or ".")):
+            source = {"builtin": "内置", "env": "SKILLS_DIR", "workspace": "工作区"}.get(s["source"], s["source"])
+            print(f"{s['name']}（{source}）— {s['description']}")
+        return 0
     config = Config.from_env()
     if (
         args.model
@@ -71,7 +80,13 @@ def main(argv: list[str] | None = None) -> int:
         print(plan)
         print()
         task = f"{task}\n\n已制定的执行计划：\n{plan}\n请按计划逐步执行。"
-    result = run(config, task, workdir=args.workdir or ".", client=client)
+    skills = None
+    if args.skill:
+        from .skills import load_skills
+
+        skills_map = load_skills(args.workdir or ".")
+        skills = [skills_map[n] for n in args.skill if n in skills_map]
+    result = run(config, task, workdir=args.workdir or ".", client=client, skills=skills)
     if not config.stream:
         print(result)
     if args.suggest:

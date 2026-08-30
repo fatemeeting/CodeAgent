@@ -46,6 +46,18 @@ def test_load_dir_supports_bracket_keywords(tmp_path):
     assert skills["bracket"].keywords == ["测试", "pytest"]
 
 
+def test_load_dir_tolerates_bom(tmp_path):
+    """Windows 记事本/Set-Content 的 UTF-8 BOM 应被容忍（utf-8-sig）。"""
+    d = tmp_path / "bom"
+    d.mkdir()
+    (d / "SKILL.md").write_bytes(
+        b"\xef\xbb\xbf" + "---\ndescription: BOM技能\n---\n正文".encode("utf-8")
+    )
+    skills = _load_dir(tmp_path, "x")
+    assert skills["bom"].description == "BOM技能"
+    assert skills["bom"].body == "正文"
+
+
 def test_load_dir_skips_empty_and_missing(tmp_path):
     d = tmp_path / "empty"
     d.mkdir()

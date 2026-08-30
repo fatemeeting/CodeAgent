@@ -45,7 +45,7 @@ def _parse_skill(dir_path: Path, source: str) -> Skill | None:
     if not md.is_file():
         return None
     try:
-        text = md.read_text(encoding="utf-8")
+        text = md.read_text(encoding="utf-8-sig")  # utf-8-sig 容忍 Windows BOM
     except OSError:
         return None
     meta: dict[str, str] = {}

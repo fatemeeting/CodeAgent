@@ -284,9 +284,9 @@
 
 ## AP. 迭代 9 切片 9.2 技能注入与命令（仅显式指定）
 
-- [ ] AP1 `run(skills=)` 注入 system（仅显式传入；chat 模式仍过滤 modes）；无自动匹配
-- [ ] AP2 `/events` 增 `skill` 参数（逗号分隔多技能、未知容错）；`skill_loaded` 事件
-- [ ] AP3 CLI `--skill NAME`（可重复）/`--list-skills`；测试（注入/多技能/未知容错/CLI）
+- [x] AP1 `run(skills=)` 注入 system（仅显式传入；chat 模式仍过滤 modes）；无自动匹配；`skill_loaded` 事件
+- [x] AP2 `/events` 增 `skill` 参数（逗号分隔多技能、未知容错）
+- [x] AP3 CLI `--skill NAME`（可重复）/`--list-skills`（免 key）；测试（注入/多技能/未知容错/CLI）；修复 Windows BOM 解析 bug
 
 ## AQ. 迭代 9 切片 9.3 事件与技能管理 UI
 

@@ -1,16 +1,16 @@
 # context-pack.md — 当前阶段上下文包
 
-> 当前阶段：**迭代 9 · 切片 9.1（技能存储与解析）**
+> 当前阶段：**迭代 9 · 切片 9.2（技能显式注入与命令）**
 
 ## 当前阶段目标
 
-新建 `agent/skills.py`：`Skill` 数据类 + `SKILL.md` 轻量 frontmatter 解析（name/description/keywords/modes + 正文，零新依赖，坏文件容错跳过，正文 4000 字截断）；三级目录合并（内置 `skills/` < `SKILLS_DIR` < 工作区 `<workdir>/.codeagent/skills`，就近覆盖去重）；`match_skills`（关键词 +3/描述词 +1 得分、上限 2、modes 过滤）；`skill_prompt` 注入片段。
+`run(skills=)` 仅注入**显式传入**的技能（system 追加 `skill_prompt` 片段；chat 模式过滤 modes）；`/events` 增 `skill` 参数（逗号分隔多技能、未知名/模式不符容错忽略）；`skill_loaded {name, description}` 事件随 run 发出；CLI `--skill NAME`（可重复）+ `--list-skills`（无需 key，先于配置加载输出）。不做自动匹配（`match_skills` 仅预留）。
 
 ## 必须读
 
-- `SPEC.md` 第 30 节（迭代 9 计划）
-- `agent/skills.py`（新建）、参考 `agent/tools/base.py`（dataclass 风格）
-- `tests/test_skills.py`（新建）
+- `SPEC.md` 第 30 节（含计划修订）、`CHECKLIST.md` AP 节
+- `agent/skills.py`（`load_skills`/`skill_prompt`/`Skill`）、`agent/loop.py`（`run` system 构建与事件点）、`agent/cli.py`、`agent/web.py`（`_handle_events` worker）
+- `tests/test_loop.py`、`tests/test_web.py`
 
 ## 不得读 / 不得改
 
@@ -18,5 +18,5 @@
 
 ## 输出要求
 
-- 产出：`agent/skills.py`、`tests/test_skills.py`
-- 验收：`pytest -q` 全绿（约 132）；`compileall`
+- 产出：`agent/loop.py`、`agent/web.py`、`agent/cli.py`、`tests/test_loop.py`、`tests/test_web.py`
+- 验收：`pytest -q` 全绿（约 139）；CLI `--list-skills`/`--skill` 冒烟；`node --check`（前端未改，回归确认）

@@ -884,6 +884,21 @@
 - **处置**：SPEC 30 第 4/5 条改写；CHECKLIST AP 节改写（AP1 去除自动匹配）；`match_skills` 保留为「推荐技能」预留并更新 docstring 说明（不接入 run）
 - **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
 
+## 迭代 9 切片 9.2：技能显式注入与命令
+
+- **时间**：2026-08-30
+- **给 Agent 的任务**：切片 9.2——技能仅显式指定装载（/events?skill、CLI --skill），无自动匹配
+- **Agent 修改了什么**：
+  - `agent/loop.py`：`run(skills=[Skill...])` 参数——显式技能经 `skill_prompt` 注入 system（chat 模式约束之后）；`skill_loaded {name, description}` 事件随 run 发出（每技能一条）
+  - `agent/web.py`：`/events` 增 `skill` 参数（逗号分隔多技能）——worker 实时 `load_skills(workdir)` 解析，未知名/模式不符容错忽略；chat 模式仅注入 modes 含 chat 的技能
+  - `agent/cli.py`：`--skill NAME`（action=append 可重复，经 load_skills 解析后传入 run）；`--list-skills`（在 Config 加载**之前**执行，免 API key，输出 `name（来源）— description`）
+  - `agent/skills.py`：修复**真 bug**——Windows `Set-Content`/记事本写入的 UTF-8 BOM（`\ufeff`）导致 frontmatter 正则失配、描述解析为空 → 读取改 `utf-8-sig`
+  - 测试：`test_loop.py` +2（显式注入/未指定不注入、skill_loaded 事件）、`test_web.py` +1（skill 参数多技能/未知容错/chat 过滤）、`test_skills.py` +1（BOM 容忍）
+- **检查证据**：
+  - `pytest -q` → **139 passed**（135 + 4）；`compileall`/`--help` EXIT=0
+  - CLI 冒烟：`--list-skills`（无 key）正确显示工作区技能 `demo（工作区）— 演示技能`（BOM 文件）；修复前描述为空
+- **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
+
 ## 迭代 9 切片 9.1：技能存储与解析
 
 - **时间**：2026-08-30

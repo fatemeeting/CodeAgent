@@ -21,6 +21,7 @@ from .llm import LLMClient
 from .loop import run
 from .plan import make_plan
 from .sessions import SessionStore
+from .skills import load_skills
 from .tools import READ_ONLY_TOOL_NAMES, tool_schemas_for
 from .tools.shell_tools import execute_command, is_dangerous
 
@@ -1695,6 +1696,9 @@ class AgentHandler(BaseHTTPRequestHandler):
         goal_mode = (query.get("goal") or ["0"])[0] in ("1", "true")
         plan_mode = (query.get("plan") or ["0"])[0] in ("1", "true")
         chat_mode = (query.get("mode") or ["agent"])[0] == "chat"
+        skill_names = [
+            s.strip() for s in (query.get("skill") or [""])[0].split(",") if s.strip()
+        ]
         session = None
         if session_id:
             try:
@@ -1731,6 +1735,17 @@ class AgentHandler(BaseHTTPRequestHandler):
                     if chat_mode:
                         run_mode = "chat"
                         run_tools = tool_schemas_for(READ_ONLY_TOOL_NAMES)
+                    # 技能：仅显式指定装载（skill 参数逗号分隔；未知名/模式不符容错忽略）
+                    loaded_skills = []
+                    if skill_names:
+                        try:
+                            skills_map = load_skills(workdir)
+                            for nm in skill_names:
+                                s = skills_map.get(nm)
+                                if s is not None and run_mode in s.modes:
+                                    loaded_skills.append(s)
+                        except Exception:  # noqa: BLE001 - 技能加载失败按无技能继续
+                            loaded_skills = []
                     if plan_mode:
                         try:
                             plan = make_plan(client, task_run)
@@ -1743,6 +1758,7 @@ class AgentHandler(BaseHTTPRequestHandler):
                         stream_cfg, task_run, workdir=workdir,
                         client=client, emit=q.put, history=history,
                         tools=run_tools, mode=run_mode,
+                        skills=loaded_skills or None,
                     )
                     # goal 状态持久化（仅在 goal 模式或恢复 open 会话时写入，避免普通对话覆盖）
                     goal_open = (session or {}).get("goal", {}).get("status") == "open"

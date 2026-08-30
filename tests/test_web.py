@@ -603,3 +603,54 @@ def test_web_sse_chat_mode_readonly_and_plan(tmp_path):
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_web_sse_skill_param(tmp_path):
+    """/events?skill= 显式装载技能（逗号分隔；未知名/模式不符容错忽略）。"""
+    server = ThreadingHTTPServer(("127.0.0.1", 0), AgentHandler)
+    server.config = _config()
+    server.workdir = "."
+    server.sessions = SessionStore(tmp_path / "data" / "sessions")
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = server.server_address[1]
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    d = ws / ".codeagent" / "skills" / "demo"
+    d.mkdir(parents=True)
+    (d / "SKILL.md").write_text(
+        "---\ndescription: 演示技能\nkeywords: 演示\n---\n指南正文", encoding="utf-8"
+    )
+    d2 = ws / ".codeagent" / "skills" / "agentonly"
+    d2.mkdir(parents=True)
+    (d2 / "SKILL.md").write_text(
+        "---\ndescription: 仅agent\nmodes: agent\n---\n正文2", encoding="utf-8"
+    )
+    client = mock.Mock()
+    captured = {}
+
+    def chat_stream(messages, tools=None, on_content=None, on_reasoning=None, on_retry=None):
+        captured["system"] = messages[0]["content"]
+        if on_content:
+            on_content("完成")
+        return _response("完成")
+
+    client.chat_stream = mock.Mock(side_effect=chat_stream)
+    try:
+        with mock.patch("agent.web.LLMClient", return_value=client):
+            url = f"http://127.0.0.1:{port}/events?task=x&workdir=" + urllib.parse.quote(str(ws)) + "&skill=demo,unknown"
+            with urllib.request.urlopen(url) as resp:
+                raw = resp.read().decode("utf-8")
+            assert "技能：demo" in captured["system"] and "指南正文" in captured["system"]
+            assert '"type": "skill_loaded"' in raw
+            # 未知技能被忽略（不报错）
+            assert "unknown" not in captured["system"]
+            # chat 模式：agent-only 技能不注入
+            captured.clear()
+            url2 = f"http://127.0.0.1:{port}/events?task=x&workdir=" + urllib.parse.quote(str(ws)) + "&mode=chat&skill=agentonly"
+            with urllib.request.urlopen(url2) as resp:
+                resp.read()
+            assert "agentonly" not in captured.get("system", "")
+    finally:
+        server.shutdown()
+        server.server_close()

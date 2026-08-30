@@ -632,3 +632,36 @@ def test_run_agent_mode_defaults_all_tools():
     kwargs = client.chat.call_args[1]
     tool_names = {t["function"]["name"] for t in kwargs.get("tools") or []}
     assert "write_file" in tool_names and "delegate_subagent" in tool_names  # 全工具
+
+
+# ---------- 技能显式注入（迭代 9 · 9.2） ----------
+
+def test_run_injects_explicit_skills():
+    """仅显式传入的技能注入 system；无 skills 时不注入。"""
+    from agent.skills import Skill
+
+    skill = Skill(name="demo", description="演示技能", body="指南正文")
+    client = mock.Mock()
+    client.chat.return_value = _response("完成")
+    with mock.patch("agent.loop.LLMClient", return_value=client):
+        run(_config(), "任务", workdir=".", skills=[skill])
+    system = client.chat.call_args[0][0][0]["content"]
+    assert "已装载技能" in system and "技能：demo" in system and "指南正文" in system
+    with mock.patch("agent.loop.LLMClient", return_value=client):
+        run(_config(), "任务", workdir=".")
+    system2 = client.chat.call_args[0][0][0]["content"]
+    assert "已装载技能" not in system2  # 未指定不注入
+
+
+def test_run_emits_skill_loaded():
+    from agent.skills import Skill
+
+    skill = Skill(name="demo", description="演示技能", body="正文")
+    client = mock.Mock()
+    client.chat_stream.return_value = _response("完成")
+    events = []
+    with mock.patch("agent.loop.LLMClient", return_value=client):
+        run(_stream_config(), "任务", workdir=".", emit=events.append, skills=[skill])
+    loaded = [e for e in events if e["type"] == "skill_loaded"]
+    assert len(loaded) == 1
+    assert loaded[0]["name"] == "demo" and loaded[0]["description"] == "演示技能"

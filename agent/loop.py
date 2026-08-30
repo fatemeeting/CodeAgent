@@ -11,6 +11,7 @@ from .config import Config
 from .context import _message_text, estimate_tokens, truncate_history
 from .llm import LLMClient
 from .parser import parse_response
+from .skills import Skill, skill_prompt
 from .tools import dispatch, set_subagent_config, tool_schemas
 from .tools.shell_tools import is_dangerous
 
@@ -382,6 +383,7 @@ def run(
     history: list[dict[str, Any]] | None = None,
     tools: list[dict[str, Any]] | None = None,
     mode: str = "agent",
+    skills: list[Skill] | None = None,
 ) -> str:
     """单次任务：构造 system + user(task)，跑一轮工具循环。可复用传入的 client。
 
@@ -390,6 +392,7 @@ def run(
     供 Web 同一会话内多轮上下文互通（参考 DSH 多轮设计）。
     tools 为本次运行的工具集（None 用全部注册工具；子代理/chat 模式用受限集）。
     mode 为运行模式：agent（默认，全能力）或 chat（只读，不可修改文件）。
+    skills 为显式指定装载的技能（仅显式传入，无自动匹配）。
     """
     if client is None:
         client = LLMClient(config)
@@ -398,6 +401,8 @@ def run(
         emit(_event("turn_start", task=task))
         if config.goal:
             emit(_event("goal_start"))
+        for s in skills or []:
+            emit(_event("skill_loaded", name=s.name, description=s.description[:120]))
     system = SYSTEM_PROMPT
     if mode == "chat":
         system += (
@@ -405,6 +410,8 @@ def run(
             "search_content/web_search），不能修改文件、执行命令或委派子代理；"
             "请直接以对话方式回答。"
         )
+    if skills:
+        system += skill_prompt(skills)
     messages: list[dict[str, Any]] = [{"role": "system", "content": system}]
     if history:
         messages.extend(history)
