@@ -866,6 +866,16 @@ function handleEvent(ev, t) {
       }
       break;
     }
+    case 'compact': {
+      const cb = createTblk(t.traceEl, 'note');
+      cb.icon = cb.head.children[0];
+      cb.icon.textContent = '📦';
+      cb.title.textContent = '上下文压缩';
+      cb.meta.textContent = (ev.before || 0) + ' → ' + (ev.after || 0) + ' tokens';
+      cb.summary.textContent = oneLine(ev.summary || '', 60);
+      cb.body.textContent = ev.summary || '';
+      break;
+    }
     case 'turn_end': {
       if (ev.interrupted) {
         const ib = createTblk(t.traceEl, 'warn');

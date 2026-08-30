@@ -798,3 +798,18 @@
   - 冒烟标记（`subagent_start`/`subagent_end`/`子代理 · ` 等）就位；`node --check` 通过
   - Node DOM 垫片：运行态类/标题/「执行中…」、完成态 `tblk sub ok` + ✓ + 摘要、buildChat 重放子代理块 → **JSFLOW 8.3 subagent OK**
 - **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
+
+## 迭代 8 切片 8.4：上下文压缩（compaction）
+
+- **时间**：2026-08-30
+- **给 Agent 的任务**：切片 8.4——超长历史先 LLM 总结旧轮次再裁剪（对齐 DSH compaction 语义）
+- **Agent 修改了什么**：
+  - `agent/loop.py`：`_maybe_compact`——仅 Web（emit 非空）且历史 ≥80% `max_context_tokens` 且 >8 条时，把「system 之后、最近 6 条之前」的 user/assistant 旧轮次交给 LLM 压缩为 ≤300 字摘要（`COMPACT_PROMPT`），替换为 `[上下文压缩摘要] …` assistant 消息；发 `compact {before, after, summary}` 事件；压缩失败静默回退旧截断；调用点在 `run_turn` 每轮 truncate 之前
+  - `agent/context.py`：`truncate_history` 保留紧跟 system 的 `[上下文压缩摘要]` 消息（过程中发现并修复真 bug：压缩摘要被截断逻辑丢弃，导致压缩无效）
+  - `agent/web.py`：`handleEvent` 的 `compact` 分支——「📦 上下文压缩」note 块（`before → after tokens` meta + 摘要正文卡片）
+  - 测试：`test_loop.py` +2（压缩触发 + 摘要注入断言；CLI emit=None 不触发额外 LLM 调用）
+- **检查证据**：
+  - `pytest -q` → **123 passed**（121 + 2）
+  - 冒烟标记（`_maybe_compact`/`COMPACT_THRESHOLD`/`[上下文压缩摘要]`/`case 'compact'` 等）就位；`node --check` 通过
+  - Node DOM 垫片：压缩块标题/📦/`5000 → 800 tokens` meta/展开正文 → **JSFLOW 8.4 compact OK**
+- **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）

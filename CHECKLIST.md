@@ -256,9 +256,9 @@
 
 ## AL. 迭代 8 切片 8.4 上下文压缩
 
-- [ ] AL1 `compact_history`：超预算先 LLM 总结旧轮次再裁剪；compact 事件（前后 token 数）
-- [ ] AL2 前端「上下文压缩」折叠块；失败回退旧截断
-- [ ] AL3 测试（触发/不触发/回退）
+- [x] AL1 `_maybe_compact`：≥80% 预算 + >8 条触发；旧轮次 LLM 总结 ≤300 字；替换为 `[上下文压缩摘要]`；`compact {before, after, summary}` 事件；失败回退旧截断；truncate_history 保留压缩摘要
+- [x] AL2 前端「📦 上下文压缩」折叠块（before → after tokens + 摘要正文）；仅 Web 启用、CLI 零回归
+- [x] AL3 测试（触发 + 摘要注入 + CLI 不触发）
 
 ## AM. 迭代 8 切片 8.5 集成回归
 

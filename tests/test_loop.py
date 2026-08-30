@@ -551,3 +551,54 @@ def test_run_emits_subagent_events(tmp_path):
     ends = [e for e in events if e["type"] == "subagent_end"]
     assert len(starts) == 1 and starts[0]["name"] == "辅助" and "独立子任务" in starts[0]["task"]
     assert len(ends) == 1 and ends[0]["ok"] is True and "子代理结果" in ends[0]["summary"]
+
+
+# ---------- 上下文压缩（迭代 8 · 8.4） ----------
+
+def _big_history(n=300):
+    history = []
+    for i in range(n):
+        history.append({"role": "user", "content": "问题" + str(i)})
+        history.append({"role": "assistant", "content": "答复" + str(i)})
+    return history
+
+
+def test_run_compacts_long_history():
+    """超预算 80% 时旧轮次被压缩为摘要（compact 事件 + 摘要注入）。"""
+    cfg = Config(
+        api_key="k",
+        base_url="https://example.com",
+        model="deepseek-chat",
+        max_iterations=5,
+        max_context_tokens=400,
+        stream=True,
+    )
+    client = mock.Mock()
+    client.chat.return_value = _response("压缩摘要内容")
+    client.chat_stream.return_value = _response("完成")
+    events = []
+    with mock.patch("agent.loop.LLMClient", return_value=client):
+        out = run(cfg, "现在的问题", workdir=".", emit=events.append, history=_big_history())
+    assert out == "完成"
+    compacts = [e for e in events if e["type"] == "compact"]
+    assert len(compacts) == 1
+    assert compacts[0]["before"] > compacts[0]["after"]
+    messages = client.chat_stream.call_args[0][0]
+    assert any("[上下文压缩摘要] 压缩摘要内容" in m.get("content", "") for m in messages)
+
+
+def test_run_cli_skips_compaction():
+    """emit=None（CLI）不触发压缩额外 LLM 调用。"""
+    cfg = Config(
+        api_key="k",
+        base_url="https://example.com",
+        model="deepseek-chat",
+        max_iterations=5,
+        max_context_tokens=400,
+    )
+    client = mock.Mock()
+    client.chat.side_effect = [_response("完成")]
+    with mock.patch("agent.loop.LLMClient", return_value=client):
+        out = run(cfg, "现在的问题", workdir=".", history=_big_history())
+    assert out == "完成"
+    assert client.chat.call_count == 1  # 仅主循环一次，无压缩调用

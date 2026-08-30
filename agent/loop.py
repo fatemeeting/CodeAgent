@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable
 
 from .config import Config
-from .context import truncate_history
+from .context import _message_text, estimate_tokens, truncate_history
 from .llm import LLMClient
 from .parser import parse_response
 from .tools import dispatch, set_subagent_config, tool_schemas
@@ -39,6 +39,61 @@ GOAL_MAX_STALL = 3  # goal 模式：连续无进展轮数上限
 GOAL_CONTINUE_PROMPT = (
     "任务尚未完成，请继续使用工具推进；若确实无法继续，请以「受阻：原因」开头说明。"
 )
+
+COMPACT_THRESHOLD = 0.8  # 历史超过预算的该比例时触发压缩
+COMPACT_KEEP_RECENT = 6  # 压缩时保留的最近消息条数
+COMPACT_SUMMARY_CHARS = 300  # 压缩摘要长度上限
+COMPACT_PROMPT = (
+    "请把以下对话历史压缩为简短摘要（300 字内），保留：任务目标、关键决策、"
+    "已完成事项、未完成事项与遗留问题。只输出摘要本身：\n"
+)
+
+
+def _history_tokens(messages: list[dict[str, Any]]) -> int:
+    return sum(estimate_tokens(_message_text(m)) for m in messages)
+
+
+def _maybe_compact(
+    client: LLMClient,
+    config: Config,
+    messages: list[dict[str, Any]],
+    emit: Callable[[dict[str, Any]], None] | None,
+) -> None:
+    """上下文压缩：历史超预算 80% 时把旧轮次总结为摘要（仅 Web 事件流启用）。
+
+    失败或条件不满足时静默跳过（随后 truncate_history 照常截断兜底）。
+    """
+    if emit is None:
+        return  # CLI 零回归
+    if _history_tokens(messages) < int(config.max_context_tokens * COMPACT_THRESHOLD):
+        return
+    if len(messages) <= COMPACT_KEEP_RECENT + 2:
+        return
+    old = messages[1 : len(messages) - COMPACT_KEEP_RECENT]
+    parts = [
+        f"{m['role']}: {_message_text(m)}"
+        for m in old
+        if m.get("role") in ("user", "assistant") and _message_text(m).strip()
+    ]
+    if not parts:
+        return
+    try:
+        response = client.chat(
+            [{"role": "user", "content": COMPACT_PROMPT + "\n".join(parts)}], tools=None
+        )
+        summary = " ".join(parse_response(response).content.split()).strip()[:COMPACT_SUMMARY_CHARS]
+    except Exception:  # noqa: BLE001 - 压缩失败回退旧截断逻辑
+        return
+    if not summary:
+        return
+    before = _history_tokens(messages)
+    messages[:] = (
+        [messages[0]]
+        + [{"role": "assistant", "content": f"[上下文压缩摘要] {summary}"}]
+        + messages[len(messages) - COMPACT_KEEP_RECENT :]
+    )
+    after = _history_tokens(messages)
+    emit(_event("compact", before=before, after=after, summary=summary))
 
 
 def _brief(text: Any, limit: int) -> str:
@@ -130,6 +185,7 @@ def run_turn(
     pending_final: str | None = None
     stall = 0  # goal 模式：连续无进展轮数
     for step in range(1, config.max_iterations + 1):
+        _maybe_compact(client, config, messages, emit)
         messages[:] = truncate_history(messages, config.max_context_tokens)
         think_started = False
 

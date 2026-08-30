@@ -47,6 +47,11 @@ def truncate_history(messages: list[dict[str, Any]], max_tokens: int) -> list[di
         head.append(messages[0])
         body = messages[1:]
 
+    # 保留压缩摘要（紧跟 system 之后的 [上下文压缩摘要] 消息，含旧轮次语义）
+    while body and str(body[0].get("content", "")).startswith("[上下文压缩摘要]"):
+        head.append(body[0])
+        body = body[1:]
+
     for i, m in enumerate(body):
         if m.get("role") == "user":
             head.append(m)
