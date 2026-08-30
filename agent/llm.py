@@ -32,8 +32,12 @@ class LLMClient:
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None = None,
         max_retries: int = 3,
+        on_retry=None,
     ) -> Any:
-        """调用 chat.completions.create；失败时指数退避重试，耗尽抛 LLMError。"""
+        """调用 chat.completions.create；失败时指数退避重试，耗尽抛 LLMError。
+
+        on_retry(attempt, max_retries, exc)：每次重试前的回调（attempt 从 1 起）。
+        """
         last_exc: Exception | None = None
         for attempt in range(max_retries):
             try:
@@ -50,6 +54,11 @@ class LLMClient:
             except Exception as exc:  # noqa: BLE001 - 统一捕获网络/API 错误后重试
                 last_exc = exc
                 if attempt < max_retries - 1:
+                    if on_retry:
+                        try:
+                            on_retry(attempt + 1, max_retries, exc)
+                        except Exception:  # noqa: BLE001 - 回调异常不影响重试
+                            pass
                     time.sleep(min(2 ** attempt, 8))
         raise LLMError(f"LLM 调用失败（已重试 {max_retries} 次）：{last_exc}") from last_exc
 
@@ -103,11 +112,13 @@ class LLMClient:
         max_retries: int = 3,
         on_content=None,
         on_reasoning=None,
+        on_retry=None,
     ) -> Any:
         """流式调用：逐 token 打印（或经回调转发）内容，并重建 tool_calls 返回等价响应。
 
         on_content(text)：内容增量回调（设置后不再打印到 stdout）；
-        on_reasoning(text)：deepseek-reasoner 思考增量回调。
+        on_reasoning(text)：deepseek-reasoner 思考增量回调；
+        on_retry(attempt, max_retries, exc)：每次重试前的回调。
         """
         last_exc: Exception | None = None
         for attempt in range(max_retries):
@@ -116,6 +127,11 @@ class LLMClient:
             except Exception as exc:  # noqa: BLE001
                 last_exc = exc
                 if attempt < max_retries - 1:
+                    if on_retry:
+                        try:
+                            on_retry(attempt + 1, max_retries, exc)
+                        except Exception:  # noqa: BLE001 - 回调异常不影响重试
+                            pass
                     time.sleep(min(2 ** attempt, 8))
         raise LLMError(f"LLM 流式调用失败（已重试 {max_retries} 次）：{last_exc}") from last_exc
 

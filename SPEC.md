@@ -182,3 +182,17 @@ coding-agent/
 2. **布局细节轻量化**：顶栏/输入区/管理器分隔用 1px 极浅边框；会话按钮改无边框轻按钮（灰字 hover 蓝）；工作区 chip 浅灰底；分隔条改 1px 细线（hover 蓝）；树/最近列表 hover 浅蓝底。
 3. **对话质感 DSH 化**：agent 答复改纯文本（去气泡框底，行高 1.65）；输入框白底 16px 圆角 + 聚焦蓝色光晕（0 0 0 3px rgba(65,118,230,.12)）；角色标签 caption 灰。
 4. **验证**：pytest 84 无回归；`node --check`；色调/布局标记冒烟；DOM 垫片回归。
+
+## 23. 迭代 7 · 切片 7.5（错误处理与状态指示）
+
+1. **LLM 重试可见化**：`chat`/`chat_stream` 增加 `on_retry(attempt, max, exc)` 回调，loop 事件化为 `retry` 事件；前端琥珀色 `↻ 重试 n/m · 原因` 行（DSH retry-shimmer 风格简化版）。
+2. **错误分级**：error 事件带 `severity`/`retryable`；工具参数 JSON 解析失败**不执行**、事件化（severity=error、retryable=true）并回填错误观测供模型修正。
+3. **非零退出码染色**：`tool_result` 事件携带 `exit_code`（execute_command 观测解析）；前端 `⚠ exit N` 琥珀色（0 绿 ✓ / 非零琥珀 ⚠ / 工具错误红 ✗）。
+4. **SSE 断线**：`es.onerror` 关闭流（防重复运行）并渲染「连接中断，请重新发送任务」错误行（服务端单次任务不支持断点续传，如实提示重发）。
+5. **回合状态指示**：Agent 标签旁状态点（思考中… / 调用工具… / 回答中… / 完成·绿 / 出错·红），脉冲动画 + reduced-motion 降级。
+
+## 24. 迭代 7 · 切片 7.5 修复（同会话上下文互通）
+
+1. **根因**：`/events` 每次 `run()` 均从 `[system, user(task)]` 全新开始，会话历史未传给模型（CLI REPL 有历史，Web 没有）。
+2. **修复（参考 DSH 多轮设计）**：`run()` 增可选 `history`（前置对话消息）；`/events` 接受 `session` 参数 → 从 `SessionStore` 加载该会话消息 → `_history_from_session` 转换（跳过空占位、剔除与当前任务相同的最后一条用户消息防重复）→ 注入本轮；前端 EventSource URL 携带当前会话 id；无 session 参数时行为不变（旧调用兼容）。
+3. **审计顺带确认**：消息保存有 pending 队列（保存与读取竞态安全：先存后读剔除当前任务，未存则 run 自增，均不重复）；`truncate_history` 对注入历史同样生效（token 预算保护）。

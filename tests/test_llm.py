@@ -119,3 +119,20 @@ def test_chat_attaches_reasoning_content():
     with mock.patch.object(client._client.chat.completions, "create", return_value=fake_resp):
         resp = client.chat([{"role": "user", "content": "x"}])
     assert resp.reasoning == "深度思考"
+
+
+def test_chat_retry_callback():
+    client = LLMClient(_config())
+    fake_resp = mock.Mock(choices=[mock.Mock(message=mock.Mock(content="ok"))])
+    calls = []
+    with mock.patch.object(
+        client._client.chat.completions, "create", side_effect=[RuntimeError("t"), fake_resp]
+    ) as m, mock.patch("agent.llm.time.sleep"):
+        resp = client.chat(
+            [{"role": "user", "content": "x"}],
+            max_retries=3,
+            on_retry=lambda attempt, mx, exc: calls.append((attempt, mx, str(exc))),
+        )
+    assert resp.choices[0].message.content == "ok"
+    assert m.call_count == 2
+    assert calls == [(1, 3, "t")]  # 重试前回调：第 1 次失败、attempt=1

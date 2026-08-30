@@ -9,7 +9,7 @@ from unittest import mock
 
 from agent.config import Config
 from agent.sessions import SessionStore
-from agent.web import AgentHandler, run_task_output
+from agent.web import AgentHandler, _history_from_session, run_task_output
 
 
 def _config():
@@ -134,7 +134,7 @@ def test_web_sse_stream():
     port = server.server_address[1]
     client = mock.Mock()
 
-    def chat_stream(messages, tools=None, on_content=None, on_reasoning=None):
+    def chat_stream(messages, tools=None, on_content=None, on_reasoning=None, on_retry=None):
         if on_content:
             on_content("完成")
         return _response("完成")
@@ -165,7 +165,7 @@ def test_web_sse_streams_incrementally():
     port = server.server_address[1]
     client = mock.Mock()
 
-    def chat_stream(messages, tools=None, on_content=None, on_reasoning=None):
+    def chat_stream(messages, tools=None, on_content=None, on_reasoning=None, on_retry=None):
         if on_reasoning:
             on_reasoning("想一下")
         for piece in ["你", "好", "，", "世界"]:
@@ -376,3 +376,67 @@ def test_web_sessions(tmp_path):
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_history_from_session_skips_placeholder_and_current_task():
+    session = {
+        "messages": [
+            {"role": "user", "raw": "第一问"},
+            {"role": "agent", "raw": "第一答"},
+            {"role": "user", "raw": "当前任务"},
+            {"role": "agent", "raw": ""},  # 流式占位
+        ]
+    }
+    hist = _history_from_session(session, "当前任务")
+    assert hist == [
+        {"role": "user", "content": "第一问"},
+        {"role": "assistant", "content": "第一答"},
+    ]
+    assert _history_from_session(None, "x") == []  # 无会话
+
+
+def test_web_sse_uses_session_history(tmp_path):
+    """/events?session= 注入会话前置历史（同会话上下文互通）。"""
+    server = ThreadingHTTPServer(("127.0.0.1", 0), AgentHandler)
+    server.config = _config()
+    server.workdir = "."
+    server.sessions = SessionStore(tmp_path / "data" / "sessions")
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = server.server_address[1]
+    client = mock.Mock()
+    captured = {}
+
+    def chat_stream(messages, tools=None, on_content=None, on_reasoning=None, on_retry=None):
+        captured["messages"] = [dict(m) for m in messages]
+        if on_content:
+            on_content("完成")
+        return _response("完成")
+
+    client.chat_stream = mock.Mock(side_effect=chat_stream)
+    s = server.sessions.create_session(str(tmp_path), "会话")
+    server.sessions.save_messages(s["id"], [
+        {"role": "user", "raw": "之前的问题"},
+        {"role": "agent", "raw": "之前的答复"},
+        {"role": "user", "raw": "现在的问题"},  # 当前任务（剔除防重复）
+        {"role": "agent", "raw": ""},           # 空占位（跳过）
+    ])
+    try:
+        with mock.patch("agent.web.LLMClient", return_value=client):
+            url = (
+                f"http://127.0.0.1:{port}/events?task="
+                + urllib.parse.quote("现在的问题")
+                + "&session="
+                + s["id"]
+            )
+            with urllib.request.urlopen(url) as resp:
+                raw = resp.read().decode("utf-8")
+    finally:
+        server.shutdown()
+        server.server_close()
+    msgs = captured["messages"]
+    assert [m["role"] for m in msgs] == ["system", "user", "assistant", "user"]
+    assert msgs[1]["content"] == "之前的问题"
+    assert msgs[2]["content"] == "之前的答复"
+    assert msgs[-1]["content"] == "现在的问题"
+    assert "完成" in raw and "[DONE]" in raw

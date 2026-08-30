@@ -1,23 +1,22 @@
 # context-pack.md — 当前阶段上下文包
 
-> 当前阶段：**迭代 7 · 切片 7.4-UI2（整体色调与布局细节，模仿 DSH design-platform）**
+> 当前阶段：**迭代 7 · 切片 7.5（错误处理与状态指示）**
 
 ## 当前阶段目标
 
-仅改 `agent/web.py` 的 CSS/HTML：色调切 DSH 冷调（页面 #f5f6f7、面板 #fff、近黑 #0f1115、三级灰 #81858c、极浅边框 rgba(0,0,0,.04)、代码底 #f9fafb、DeepSeek 蓝 #4176e6 替代橙、状态色 #22c55e/#ef4444/#f59e0b）；布局轻量化（顶栏/输入区极浅分隔、会话按钮无边框轻按钮、chip 浅灰、分隔条 1px 细线 hover 蓝、树/最近 hover 浅蓝底）；对话质感（agent 答复纯文本化、输入框白底 16px 圆角 + 蓝色聚焦光晕、角色标签 caption 灰）。布局结构（三栏）不变。
+① LLM 重试可见化：`llm.py` 的 `chat`/`chat_stream` 增 `on_retry` 回调，`loop.py` 事件化 `retry` 事件，前端琥珀 `↻ 重试 n/m · 原因` 行；② 错误分级：error 事件带 severity/retryable，工具参数 JSON 解析失败不执行并事件化 + 回填错误观测；③ `tool_result` 携带 `exit_code`（execute_command 观测正则提取），前端 0 绿 / 非零琥珀 ⚠ / 错误红 ✗；④ SSE 断线：关闭流 + 「连接中断，请重新发送任务」错误行（单次任务不支持断点续传，如实降级）；⑤ Agent 标签旁回合状态指示（思考/工具/回答/完成/出错 + 脉冲动画）。
 
 ## 必须读
 
-- `SPEC.md` 第 22 节（本切片范围）
-- `agent/web.py`（`:root` 令牌与全部 CSS 选择器）
-- 参考（临时克隆）：`%TEMP%\dsh-desktop\deepseek-harness\packages\client\ui-theme\src\styles\design-platform.css`
+- `SPEC.md` 第 23 节（本切片范围）
+- `agent/llm.py`（重试循环）、`agent/loop.py`（tool 执行段与事件点）、`agent/parser.py`（`_parse_arguments` 的 `_error` 占位）、`agent/web.py`（`handleEvent`/`appendAgentMsg`/`sendTask` 的 `es.onerror`）
 
 ## 不得读 / 不得改
 
 - `.env`（真实凭据）
-- 后端与 JS 逻辑（只读，本切片纯 CSS/HTML）
+- `agent/sessions.py` 与 CRUD 端点（只读）
 
 ## 输出要求
 
-- 产出：`agent/web.py`（CSS/HTML 微调）
-- 验收：`pytest -q` 全绿（84）；`node --check`；色调/布局标记冒烟；DOM 垫片回归
+- 产出：`agent/llm.py`、`agent/loop.py`、`agent/web.py`、`tests/test_llm.py`、`tests/test_loop.py`
+- 验收：`pytest -q` 全绿（约 88）；`node --check`；DOM 垫片（retry 行/exit 染色/断线行/状态指示）；冒烟标记

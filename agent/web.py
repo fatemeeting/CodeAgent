@@ -131,6 +131,19 @@ INDEX_HTML = """<!DOCTYPE html>
   .tblk.note .tblk-body { color: var(--muted); }
   /* 回合统计行（模仿 DSH StatsLine） */
   .turn-stats { margin: 2px 0 6px; color: var(--muted); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* 重试行（迭代 7 · 7.5） */
+  .tblk.retry .tblk-icon, .tblk.retry .tblk-title { color: var(--warn); }
+  .tblk.retry .tblk-head { cursor: default; }
+  .tblk.tool.warn .tblk-meta { color: var(--warn); }
+  /* 回合状态指示（迭代 7 · 7.5） */
+  .turn-status { margin-left: 6px; font-size: 12px; color: var(--caption); }
+  .turn-status::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 3px; background: var(--accent); margin-right: 4px; vertical-align: middle; animation: status-pulse 1.2s ease-in-out infinite; }
+  @keyframes status-pulse { 50% { opacity: 0.35; } }
+  .turn-status.done { color: var(--muted); }
+  .turn-status.done::before { background: var(--ok); animation: none; }
+  .turn-status.err { color: var(--err); }
+  .turn-status.err::before { background: var(--err); animation: none; }
+  @media (prefers-reduced-motion: reduce) { .turn-status::before { animation: none; } }
   /* 文件页（右栏） */
   #file-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 12px 16px 8px; }
   #file-tab { display: none; font-family: Consolas, monospace; font-size: 14px; font-weight: 600; background: var(--surface); border: 1px solid var(--border-l1); border-radius: 6px 6px 0 0; padding: 6px 12px; }
@@ -582,6 +595,9 @@ function appendAgentMsg() {
   const label = document.createElement('div');
   label.className = 'role-label';
   label.textContent = 'Agent';
+  const status = document.createElement('span');
+  status.className = 'turn-status';
+  label.appendChild(status);
   col.appendChild(label);
   const traceEl = document.createElement('div');
   traceEl.className = 'trace';
@@ -592,7 +608,7 @@ function appendAgentMsg() {
   wrap.appendChild(col);
   history.appendChild(wrap);
   history.scrollTop = history.scrollHeight;
-  return {bubble: bubble, traceEl: traceEl};
+  return {bubble: bubble, traceEl: traceEl, status: status};
 }
 
 /* ---------- 轨迹折叠块（迭代 7 · 7.4-UI，模仿 DSH DisclosureRow） ---------- */
@@ -664,7 +680,14 @@ function newTurnState(bubble, traceEl) {
     answerRaw: '', roundRaw: '', thinkRaw: '',
     think: null, pendingTools: [], traceEvents: [],
     steps: 0, toolMs: 0, statsEl: null,
+    statusEl: null, connErr: false, done: false,
   };
+}
+
+function setStatus(t, text, cls) {
+  if (!t.statusEl) return;
+  t.statusEl.textContent = text;
+  t.statusEl.className = 'turn-status' + (cls ? ' ' + cls : '');
 }
 
 function handleEvent(ev, t) {
@@ -676,6 +699,7 @@ function handleEvent(ev, t) {
       t.think.icon = t.think.head.children[0];
       t.think.icon.textContent = '🧠';
       t.think.title.textContent = 'Think';
+      setStatus(t, '思考中…');
       break;
     case 'think_delta':
       t.thinkRaw += ev.text;
@@ -697,6 +721,7 @@ function handleEvent(ev, t) {
     case 'content_delta':
       t.roundRaw += ev.text;
       setBubbleRaw(t.bubble, t.answerRaw + t.roundRaw);
+      setStatus(t, '回答中…');
       break;
     case 'round_end':
       if (ev.has_tools) {
@@ -728,13 +753,17 @@ function handleEvent(ev, t) {
       tb.body.textContent = 'tool: ' + tb.name + '\\nparameter: ' + tb.args;
       t.steps += 1;
       t.pendingTools.push(tb);
+      setStatus(t, '调用工具…');
       break;
     }
     case 'tool_result': {
       const tb = t.pendingTools.shift();
       if (tb) {
-        tb.root.className = 'tblk tool ' + (ev.ok ? 'ok' : 'err');
-        tb.meta.textContent = '(' + formatMs(ev.duration_ms || 0) + ' ' + (ev.ok ? '✓' : '✗') + ')';
+        const warn = typeof ev.exit_code === 'number' && ev.exit_code !== 0;
+        tb.root.className = 'tblk tool ' + (ev.ok ? (warn ? 'warn' : 'ok') : 'err');
+        tb.meta.textContent = warn
+          ? '(' + formatMs(ev.duration_ms || 0) + ' ⚠ exit ' + ev.exit_code + ')'
+          : '(' + formatMs(ev.duration_ms || 0) + ' ' + (ev.ok ? '✓' : '✗') + ')';
         tb.body.textContent = 'tool: ' + (tb.name || ev.name || '') + '\\nparameter: ' + (tb.args || '') + '\\noutput: ' + (ev.output || '');
         t.toolMs += ev.duration_ms || 0;
       }
@@ -745,8 +774,18 @@ function handleEvent(ev, t) {
       eb.icon = eb.head.children[0];
       eb.icon.textContent = '⚠️';
       eb.title.textContent = ev.severity || 'error';
-      eb.summary.textContent = oneLine(ev.message || ev.text || '', 60);
+      eb.summary.textContent = oneLine(ev.message || ev.text || '', 60) + (ev.retryable ? '（可重试）' : '');
       eb.body.textContent = ev.message || ev.text || '';
+      setStatus(t, '出错', 'err');
+      break;
+    }
+    case 'retry': {
+      const rb = createTblk(t.traceEl, 'retry');
+      rb.head.onclick = null;
+      rb.icon = rb.head.children[0];
+      rb.icon.textContent = '↻';
+      rb.title.textContent = '重试 ' + (ev.attempt || 1) + '/' + (ev.max || 3);
+      rb.summary.textContent = oneLine(ev.message || '', 60);
       break;
     }
     case 'turn_end': {
@@ -765,6 +804,7 @@ function handleEvent(ev, t) {
         t.statsEl.textContent = groups.join(' · ');
         t.traceEl.appendChild(t.statsEl);
       }
+      setStatus(t, '完成', 'done');
       break;
     }
   }
@@ -894,13 +934,16 @@ async function sendTask() {
   const idx = chatMessages.length - 1;
   await ensureSession(task);
   saveMessages();
-  const es = new EventSource('/events?task=' + encodeURIComponent(task) + '&workdir=' + encodeURIComponent(state.workspace));
+  const es = new EventSource('/events?task=' + encodeURIComponent(task) + '&workdir=' + encodeURIComponent(state.workspace) + '&session=' + encodeURIComponent(currentSessionId || ''));
   const t = newTurnState(agent.bubble, agent.traceEl);
+  t.statusEl = agent.status;
   es.onmessage = function (e) {
     if (e.data === '[DONE]') {
+      t.done = true;  // 正常结束标记：其后的 EOF onerror 不再误报断线
       es.close();
       chatMessages[idx].raw = t.answerRaw;
       chatMessages[idx].trace = t.traceEvents;
+      setStatus(t, '完成', 'done');
       refreshFiles();
       saveMessages();
       if (firstTask) { autoRenameSession(firstTask); firstTask = null; }
@@ -912,7 +955,18 @@ async function sendTask() {
     const h = document.getElementById('chat-history');
     h.scrollTop = h.scrollHeight;
   };
-  es.onerror = function () { es.close(); };
+  es.onerror = function () {
+    es.close();  // 防 EventSource 自动重连导致服务端重复运行任务
+    if (t.done || t.connErr) return;  // 正常完成后的 EOF 或已提示过 → 忽略
+    t.connErr = true;
+    const eb = createTblk(t.traceEl, 'err');
+    eb.icon = eb.head.children[0];
+    eb.icon.textContent = '⚠️';
+    eb.title.textContent = '连接中断';
+    eb.summary.textContent = '流已停止，请重新发送任务';
+    eb.body.textContent = 'SSE 连接中断，服务端任务已停止；请重新发送任务继续。';
+    setStatus(t, '出错', 'err');
+  };
 }
 
 /* ---------- 中央编辑器（Monaco，CDN；离线回退行号视图） ---------- */
@@ -1193,6 +1247,34 @@ def pick_workspace() -> str | None:
 _SKIP_DIRS = {".git", ".venv", "venv", "__pycache__", "node_modules", ".idea", ".vscode", "dist", "build"}
 
 
+def _history_from_session(session: dict | None, task: str) -> list[dict[str, str]]:
+    """把会话持久化消息转成 LLM 前置历史（同会话上下文互通）。
+
+    规则：跳过空消息（raw 为空，如流式占位）；剔除「与当前任务内容相同的
+    最后一条 user 消息」（前端已在发请求前保存当前任务，避免重复注入）。
+    """
+    if not session:
+        return []
+    saved = session.get("messages") or []
+    last_match: int | None = None
+    for i, m in enumerate(saved):
+        if m.get("role") == "user" and (m.get("raw") or "").strip() == task:
+            last_match = i
+    history: list[dict[str, str]] = []
+    for i, m in enumerate(saved):
+        if i == last_match:
+            continue
+        role = m.get("role")
+        raw = (m.get("raw") or "").strip()
+        if not raw:
+            continue
+        if role == "user":
+            history.append({"role": "user", "content": raw})
+        elif role == "agent":
+            history.append({"role": "assistant", "content": raw})
+    return history
+
+
 def _workspace_tree(workdir: str, deep: bool = False, max_depth: int = 5) -> list[dict]:
     """工作区条目：默认顶层平铺（校验/下拉用）；deep=True 返回递归树（文件树用）。"""
     root = Path(workdir)
@@ -1346,6 +1428,14 @@ class AgentHandler(BaseHTTPRequestHandler):
         if not Path(workdir).is_dir():
             self.send_error(400, f"工作区不存在：{workdir}")
             return
+        session_id = (query.get("session") or [None])[0]
+        session = None
+        if session_id:
+            try:
+                session = self._sessions().get_session(session_id)
+            except Exception:  # noqa: BLE001 - 会话读取失败按全新会话处理
+                session = None
+        history = _history_from_session(session, task)  # 同会话上下文互通
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
         self.send_header("Cache-Control", "no-cache")
@@ -1359,7 +1449,7 @@ class AgentHandler(BaseHTTPRequestHandler):
                 with contextlib.redirect_stdout(_NullWriter()):
                     stream_cfg = dataclasses.replace(config, stream=True)  # Web 恒流式
                     client = LLMClient(stream_cfg)
-                    run(stream_cfg, task, workdir=workdir, client=client, emit=q.put)
+                    run(stream_cfg, task, workdir=workdir, client=client, emit=q.put, history=history)
             except Exception as exc:  # noqa: BLE001 - 错误推送给前端
                 q.put({"type": "error", "severity": "error", "message": str(exc), "text": f"错误：{exc}"})
             finally:
@@ -1371,7 +1461,13 @@ class AgentHandler(BaseHTTPRequestHandler):
                 item = q.get()
                 if item is None:
                     break
-                payload = json.dumps(item, ensure_ascii=False)
+                try:
+                    payload = json.dumps(item, ensure_ascii=False)
+                except TypeError:  # 防御：事件不可序列化时降级为错误帧，避免流中断
+                    payload = json.dumps(
+                        {"type": "error", "severity": "error", "message": "事件序列化失败", "text": ""},
+                        ensure_ascii=False,
+                    )
                 self.wfile.write(f"data: {payload}\n\n".encode("utf-8"))
                 self.wfile.flush()
         except (BrokenPipeError, ConnectionResetError):

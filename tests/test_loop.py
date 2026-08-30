@@ -128,7 +128,7 @@ def test_run_emits_event_stream(tmp_path):
     ]
     client = mock.Mock()
 
-    def chat_stream(messages, tools=None, on_content=None, on_reasoning=None):
+    def chat_stream(messages, tools=None, on_content=None, on_reasoning=None, on_retry=None):
         resp = responses.pop(0)
         content = resp.choices[0].message.content
         if on_content and content:
@@ -156,7 +156,7 @@ def test_run_emits_event_stream(tmp_path):
 def test_run_emits_think_events():
     client = mock.Mock()
 
-    def chat_stream(messages, tools=None, on_content=None, on_reasoning=None):
+    def chat_stream(messages, tools=None, on_content=None, on_reasoning=None, on_retry=None):
         if on_reasoning:
             on_reasoning("先想")
         if on_content:
@@ -184,7 +184,7 @@ def test_run_emits_untruncated_tool_output(tmp_path):
     responses = [_response(content=None, tool_calls=[_tool_call()]), _response(content="完成")]
     client = mock.Mock()
 
-    def chat_stream(messages, tools=None, on_content=None, on_reasoning=None):
+    def chat_stream(messages, tools=None, on_content=None, on_reasoning=None, on_retry=None):
         resp = responses.pop(0)
         content = resp.choices[0].message.content
         if on_content and content:
@@ -341,3 +341,114 @@ def test_run_logs_tool_calls(capsys, tmp_path):
     out = capsys.readouterr().out
     assert "调用工具 write_file" in out
     assert "↳" in out
+
+
+def test_run_emits_retry_event():
+    client = mock.Mock()
+
+    def chat_stream(messages, tools=None, on_content=None, on_reasoning=None, on_retry=None):
+        if on_retry:
+            on_retry(2, 3, RuntimeError("网络错误"))
+        return _response(content="完成")
+
+    client.chat_stream.side_effect = chat_stream
+    events = []
+    with mock.patch("agent.loop.LLMClient", return_value=client):
+        run(_stream_config(), "任务", workdir=".", emit=events.append)
+    retries = [e for e in events if e["type"] == "retry"]
+    assert retries and retries[0]["attempt"] == 2 and retries[0]["max"] == 3
+    assert "网络错误" in retries[0]["message"]
+
+
+def test_run_emits_exit_code(tmp_path):
+    """execute_command 非零退出码进入 tool_result.exit_code。"""
+    call = _tool_call("c1", "execute_command", '{"command": "echo hi"}')
+    responses = [_response(content=None, tool_calls=[call]), _response(content="完成")]
+    client = mock.Mock()
+
+    def chat_stream(messages, tools=None, on_content=None, on_reasoning=None, on_retry=None):
+        resp = responses.pop(0)
+        if on_content and resp.choices[0].message.content:
+            on_content(resp.choices[0].message.content)
+        return resp
+
+    client.chat_stream.side_effect = chat_stream
+    events = []
+    with mock.patch("agent.loop.LLMClient", return_value=client), mock.patch(
+        "agent.loop.dispatch", return_value="out\n[exit_code: 3]"
+    ):
+        run(_stream_config(), "任务", workdir=str(tmp_path), emit=events.append)
+    tr = next(e for e in events if e["type"] == "tool_result")
+    assert tr["exit_code"] == 3
+
+
+def test_run_param_parse_failure_skips_execution(tmp_path):
+    """参数 JSON 解析失败：不执行工具、error 事件化、回填错误观测。"""
+    bad = _tool_call("c1", "write_file", "not json{")
+    responses = [_response(content=None, tool_calls=[bad]), _response(content="完成")]
+    client = mock.Mock()
+
+    def chat_stream(messages, tools=None, on_content=None, on_reasoning=None, on_retry=None):
+        resp = responses.pop(0)
+        if on_content and resp.choices[0].message.content:
+            on_content(resp.choices[0].message.content)
+        return resp
+
+    client.chat_stream.side_effect = chat_stream
+    events = []
+    dispatched = mock.Mock()
+    with mock.patch("agent.loop.LLMClient", return_value=client), mock.patch(
+        "agent.loop.dispatch", dispatched
+    ):
+        out = run(_stream_config(), "任务", workdir=str(tmp_path), emit=events.append)
+    assert out == "完成"
+    dispatched.assert_not_called()  # 解析失败不执行
+    errs = [e for e in events if e["type"] == "error"]
+    assert errs and errs[0]["retryable"] is True and "解析失败" in errs[0]["message"]
+    tr = next(e for e in events if e["type"] == "tool_result")
+    assert tr["ok"] is False and "解析失败" in tr["output"]
+
+
+def test_run_with_history_includes_prior_turns():
+    """history 前置对话注入本轮（同会话上下文互通）。"""
+    client = mock.Mock()
+    client.chat.return_value = _response(content="完成")
+    history = [
+        {"role": "user", "content": "之前的问题"},
+        {"role": "assistant", "content": "之前的答复"},
+    ]
+    with mock.patch("agent.loop.LLMClient", return_value=client):
+        out = run(_config(), "现在的问题", workdir=".", history=history)
+    assert out == "完成"
+    messages = client.chat.call_args[0][0]
+    roles = [m["role"] for m in messages]
+    assert roles[:4] == ["system", "user", "assistant", "user"]  # 历史注入
+    assert messages[-1]["role"] == "assistant"  # 本轮答复回填
+    assert messages[1]["content"] == "之前的问题"
+    assert messages[2]["content"] == "之前的答复"
+    assert messages[-2]["content"] == "现在的问题"
+
+
+def test_run_truncates_long_history():
+    """超长历史按 max_context_tokens 截断（保留 system + 首条 user + 最近消息）。"""
+    client = mock.Mock()
+    client.chat.return_value = _response(content="完成")
+    history = []
+    for i in range(300):
+        history.append({"role": "user", "content": "问题" + str(i)})
+        history.append({"role": "assistant", "content": "答复" + str(i)})
+    cfg = Config(
+        api_key="k",
+        base_url="https://example.com",
+        model="deepseek-chat",
+        max_iterations=5,
+        max_context_tokens=500,  # 600 条历史远超预算
+    )
+    with mock.patch("agent.loop.LLMClient", return_value=client):
+        run(cfg, "现在的问题", workdir=".", history=history)
+    messages = client.chat.call_args[0][0]
+    assert messages[0]["role"] == "system"
+    assert messages[1]["content"] == "问题0"  # 首条 user 保留
+    contents = [m.get("content", "") for m in messages]
+    assert "现在的问题" in contents  # 本轮任务始终在
+    assert len(messages) < len(history) + 2  # 发生截断

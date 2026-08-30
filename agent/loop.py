@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable
@@ -132,15 +133,20 @@ def run_turn(
         def on_content(text: str) -> None:
             emit(_event("content_delta", text=text))
 
+        def on_retry(attempt: int, max_retries: int, exc: Exception) -> None:
+            if emit:
+                emit(_event("retry", attempt=attempt, max=max_retries, message=str(exc)))
+
         if config.stream:
             response = client.chat_stream(
                 messages,
                 tools=tools,
                 on_content=on_content if emit else None,
                 on_reasoning=on_reasoning if emit else None,
+                on_retry=on_retry if emit else None,
             )
         else:
-            response = client.chat(messages, tools=tools)
+            response = client.chat(messages, tools=tools, on_retry=on_retry if emit else None)
         parsed = parse_response(response)
 
         if emit:
@@ -185,7 +191,23 @@ def run_turn(
                     if not _confirm_dangerous(command):
                         refused[i] = f"用户取消了危险命令：{command}"
 
-        executable_indices = [i for i in range(len(parsed.tool_calls)) if i not in refused]
+        # 参数 JSON 解析失败：不执行，事件化并回填错误观测供模型修正
+        bad_args: dict[int, str] = {}
+        for i, tc in enumerate(parsed.tool_calls):
+            err = tc.arguments.get("_error") if isinstance(tc.arguments, dict) else None
+            if err:
+                bad_args[i] = f"错误：工具 {tc.name} 参数解析失败：{err}"
+                if emit:
+                    emit(_event(
+                        "error",
+                        severity="error",
+                        retryable=True,
+                        message=f"工具 {tc.name} 参数解析失败：{err}",
+                    ))
+
+        executable_indices = [
+            i for i in range(len(parsed.tool_calls)) if i not in refused and i not in bad_args
+        ]
         executable_calls = [parsed.tool_calls[i] for i in executable_indices]
         results = _execute_tool_calls(executable_calls, workdir) if executable_calls else []
         observations: list[str] = [""] * len(parsed.tool_calls)
@@ -194,12 +216,19 @@ def run_turn(
         durations = {i: ms for i, (_obs, ms) in zip(executable_indices, results)}
         for i, obs in refused.items():
             observations[i] = obs
+        for i, obs in bad_args.items():
+            observations[i] = obs
 
         for i, (tc, observation) in enumerate(zip(parsed.tool_calls, observations)):
             full_obs = observation  # 轨迹用完整观测（不截断）
             if len(observation) > MAX_TOOL_TEXT:
                 observation = observation[:MAX_TOOL_TEXT] + "\n...（观测过长已截断）"
             if emit:
+                exit_code = None
+                if tc.name == "execute_command":
+                    m = re.search(r"\[exit_code: (-?\d+)\]", full_obs)
+                    if m:
+                        exit_code = int(m.group(1))
                 emit(_event(
                     "tool_result",
                     step=step,
@@ -207,6 +236,7 @@ def run_turn(
                     ok=not full_obs.startswith("错误"),
                     output=full_obs,
                     duration_ms=durations.get(i, 0),
+                    exit_code=exit_code,
                 ))
             else:
                 _log_observation(observation)
@@ -227,19 +257,22 @@ def run(
     workdir: str = ".",
     client: LLMClient | None = None,
     emit: Callable[[dict[str, Any]], None] | None = None,
+    history: list[dict[str, Any]] | None = None,
 ) -> str:
     """单次任务：构造 system + user(task)，跑一轮工具循环。可复用传入的 client。
 
     emit 为轨迹事件回调（Web 用）；为 None 时保持 CLI 打印行为。
+    history 为前置对话（[{"role": "user"/"assistant", "content": ...}]），
+    供 Web 同一会话内多轮上下文互通（参考 DSH 多轮设计）。
     """
     if client is None:
         client = LLMClient(config)
     if emit:
         emit(_event("turn_start", task=task))
-    messages: list[dict[str, Any]] = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": task},
-    ]
+    messages: list[dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT}]
+    if history:
+        messages.extend(history)
+    messages.append({"role": "user", "content": task})
     try:
         return run_turn(client, config, messages, tool_schemas(), workdir, emit)
     finally:

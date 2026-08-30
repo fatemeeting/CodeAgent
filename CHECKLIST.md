@@ -214,9 +214,11 @@
 
 ## AF. 迭代 7 切片 7.5 错误处理与状态指示
 
-- [ ] AF1 error 事件（severity/retryable）与 LLM 重试可见化
-- [ ] AF2 SSE 断线「连接中断 + 重新连接」
-- [ ] AF3 非零退出码/超时染色；参数解析失败事件化；回合状态指示
+- [x] AF1 error 事件（severity/retryable）与 LLM 重试可见化
+- [x] AF2 SSE 断线「连接中断 + 重新发送任务」（关闭流防重复运行；单次任务无断点续传，如实降级）
+- [x] AF3 非零退出码/超时染色；参数解析失败事件化；回合状态指示
+- [x] AF4 SSE 正常结束误报修复：`t.done` 标记（EOF onerror 不再误报断线）+ 事件序列化防御（TypeError 降级为错误帧）
+- [x] AF5 同会话上下文互通：`run(history=)` + `/events?session=` 加载会话历史注入本轮（跳过空占位/剔除当前任务防重复）；超长历史按 max_context_tokens 截断；无 session 参数不回归
 
 ## AG. 迭代 7 切片 7.6 集成回归
 

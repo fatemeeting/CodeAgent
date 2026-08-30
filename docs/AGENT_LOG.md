@@ -633,3 +633,48 @@
   - 冒烟：12 项色调/布局标记全部就位 + 重复规则计数 = 1；`node --check` 通过
   - Node DOM 垫片回归（轨迹流 + 展开 + 统计行）→ **JSFLOW 7.4-UI2 回归 OK**
 - **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
+
+## 迭代 7 切片 7.5：错误处理与状态指示
+
+- **时间**：2026-08-29
+- **给 Agent 的任务**：切片 7.5——LLM 重试可见化、错误分级、非零退出码染色、SSE 断线处理、回合状态指示
+- **Agent 修改了什么**：
+  - `agent/llm.py`：`chat`/`chat_stream` 增 `on_retry(attempt, max, exc)` 回调（重试前触发，回调异常不影响重试）
+  - `agent/loop.py`：`retry` 事件（attempt/max/message）；参数 JSON 解析失败（`parser._parse_arguments` 的 `_error`）**不执行工具**、`error` 事件（severity=error、retryable=true）并回填错误观测供模型修正；`tool_result` 增 `exit_code`（execute_command 观测 `[exit_code: N]` 正则提取）
+  - `agent/web.py`：`↻ 重试 n/m · 原因` 琥珀行（不可展开）；error 摘要带「（可重试）」；exit_code≠0 → `tblk tool warn` + `(50ms ⚠ exit 3)` 琥珀 meta（0 绿 / 错误红不变）；`es.onerror` 关闭流（防 EventSource 自动重连导致服务端重复运行）+「连接中断，请重新发送任务」错误行（去重）；Agent 标签旁回合状态指示（思考中…/调用工具…/回答中…/完成·绿/出错·红，脉冲动画 + reduced-motion 降级）
+  - 测试：`test_llm.py` +1（retry 回调）；`test_loop.py` +3（retry 事件、exit_code、解析失败跳过执行）；既有 mock 签名补 `on_retry`
+- **检查证据**：
+  - `pytest -q` → **88 passed**（84 + 4 新增）
+  - 冒烟标记（`.tblk.retry`/`.tblk.tool.warn`/`.turn-status`/`status-pulse`/`ev.exit_code`/`连接中断` 等 10 项）就位；`node --check` 通过
+  - Node DOM 垫片：状态四段流转、retry 行标题/摘要、exit warn 类 + `(50ms ⚠ exit 3)` meta、断线错误行与状态出错、断线块去重 → **JSFLOW 7.5 OK**
+- **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
+
+## 迭代 7 切片 7.5 修复：SSE 正常结束误报断线
+
+- **时间**：2026-08-29
+- **给 Agent 的任务**（用户反馈）：每次发送请求都会返回「SSE 连接中断，服务端任务已停止；请重新发送任务继续」
+- **根因**：`EventSource` 在服务端关闭连接（HTTP/1.0、无 retry 字段）时会对 EOF 派发 `onerror`——即使 `[DONE]` 已正常处理。7.5 前 onerror 是静默 close，7.5 改为渲染断线行后，**每次正常完成的请求也被误报**
+- **Agent 修改了什么**（`agent/web.py`）：
+  - 前端：`[DONE]` 处理时置 `t.done = true` 再 close；`es.onerror` 里 `if (t.done || t.connErr) return`——正常完成后的 EOF 事件不再渲染断线行；真断线（未收到 [DONE]）仍渲染且去重
+  - 后端：SSE 写循环对 `json.dumps` 加 `except TypeError` 防御（不可序列化事件降级为错误帧），保证 `[DONE]` 始终发出
+- **检查证据**：
+  - `pytest -q` → **88 passed**（无回归）
+  - 冒烟标记（`t.done = true`/`t.done || t.connErr`/序列化防御）就位；`node --check` 通过
+  - Node DOM 垫片双场景：`[DONE]` 后 onerror → **0 个错误行**；未 [DONE] 的 onerror ×2 → **恰好 1 个**断线行 → **JSFLOW 7.5fix OK**
+- **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
+
+## 迭代 7 切片 7.5 修复 2：同会话上下文互通
+
+- **时间**：2026-08-29
+- **给 Agent 的任务**（用户反馈）：同一 session 内上下文不互通；参考 DSH 修复并检查其他问题
+- **根因**：`/events` 每次调用 `run()` 都从 `[system, user(task)]` 全新开始，会话历史从未传给模型（CLI REPL 有历史，Web 没有）
+- **Agent 修改了什么**（参考 DSH 多轮设计）：
+  - `agent/loop.py`：`run()` 增可选 `history` 参数（前置对话消息，注入 system 与本轮 user 之间）
+  - `agent/web.py`：`/events` 接受 `session` 参数 → 从 `SessionStore` 加载会话 → `_history_from_session`（跳过空占位 raw、剔除「与当前任务相同的最后一条 user 消息」防重复注入、user→user / agent→assistant 映射）→ worker 传 `history=history`；无 session 参数行为不变（旧调用兼容）
+  - 前端：EventSource URL 携带 `&session=<当前会话 id>`
+  - 审计确认：保存与读取竞态安全（先存后读→剔除当前任务；未存→run 自增，均不重复）；`truncate_history` 对注入历史同样生效（token 预算保护）；`saveMessages` pending 队列、`switchSession` 重放、断线去重均正常
+- **检查证据**：
+  - `pytest -q` → **92 passed**（+4：`run(history=)` 注入、`_history_from_session` 转换、`/events?session=` 端到端历史注入、超长历史按 max_context_tokens 截断）
+  - 冒烟标记（前端 `&session=`、后端 `history=history`/`_history_from_session`）就位；`node --check` 通过
+  - Node DOM 垫片：EventSource URL 携带 session 参数 + 正常答复定稿 → **JSFLOW 会话参数 OK**
+- **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
