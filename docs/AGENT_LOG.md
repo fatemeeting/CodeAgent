@@ -876,3 +876,22 @@
   - 回归证据：`pytest -q` → **127 passed**；`compileall` EXIT=0；`node --check` 通过；真实冒烟累计 6 次（goal 完成/受阻、复合 todo+web_search+subagent、web_search 直连、chat 只读、plan 执行）
 - **审查发现与处置**：① SPEC 29 缺输入栏按钮与命令浮层两项 → 已补（第 5/6 条）；② 迭代 8 总结「/plan、/chat 留待后续」已过时 → 已改（8.6 已实现双模式与 /plan、/chat 命令）
 - **人工放行决定**：待人工确认
+
+## 迭代 9 计划修订：技能仅显式指定装载
+
+- **时间**：2026-08-30
+- **用户决策**：使用 skills 要求用户**显式指定**（/skill 命令、/skills 浮层选择、CLI --skill），不做任务关键词自动匹配
+- **处置**：SPEC 30 第 4/5 条改写；CHECKLIST AP 节改写（AP1 去除自动匹配）；`match_skills` 保留为「推荐技能」预留并更新 docstring 说明（不接入 run）
+- **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
+
+## 迭代 9 切片 9.1：技能存储与解析
+
+- **时间**：2026-08-30
+- **给 Agent 的任务**：迭代 9 Skills 模块 · 切片 9.1——技能存储与解析（零新依赖）
+- **Agent 修改了什么**：
+  - 新建 `agent/skills.py`：`Skill` 数据类（name/description/keywords/modes/source/body/error）；`_parse_skill` 解析 SKILL.md 轻量 frontmatter（`---\nname:…\ndescription:…\nkeywords:…\nmodes:…\n---`，兼容逗号与 `[a, b]` 列表；正文 4000 字截断；空/坏技能跳过）；`_load_dir` 目录扫描；`load_skills` 三级合并（内置 `skills/` < `SKILLS_DIR` < 工作区 `.codeagent/skills`，就近覆盖去重）；`match_skills`（关键词 +3 / 描述词 +1 得分、按分排序、上限 2、modes 过滤）；`skill_prompt` 注入片段；`skill_summary` 列表摘要；`workspace_skills_dir` 路径
+  - 新建 `tests/test_skills.py`：8 用例（frontmatter 解析、括号列表、空/缺 SKILL.md 跳过、三级合并优先级、匹配排序与上限、模式过滤、注入片段、摘要排序与路径）
+- **检查证据**：
+  - `pytest -q` → **135 passed**（127 + 8 新增）；`compileall` EXIT=0
+  - 过程中修正 2 处测试自身问题（空技能写入文本非空；Windows 路径分隔符断言）
+- **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）

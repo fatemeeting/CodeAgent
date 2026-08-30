@@ -274,3 +274,33 @@
 - [x] AN4 测试（chat 工具集/prompt、plan 事件、命令解析、模式切换）+ 真实冒烟（chat 仅 list_directory、plan 事件 + 计划执行）
 - [x] AN5 输入框左侧模式切换按钮（🤖 Agent / 💬 Chat 胶囊，点击切换 + localStorage）；顶栏切换移除
 - [x] AN6 `/` 命令浮层：输入 `/` 弹出 `/plan`、`/goal` 选择栏（图标 + 描述 + 悬停高亮 + ↑↓/Enter/Esc 键盘导航 + 点击插入）
+
+## AO. 迭代 9 切片 9.1 技能存储与解析
+
+- [x] AO1 `agent/skills.py`：Skill 模型 + SKILL.md frontmatter 解析（零依赖、容错跳过坏文件、正文 4000 字限）
+- [x] AO2 三级目录合并（内置 < SKILLS_DIR < 工作区 .codeagent/skills，就近覆盖去重）+ `workspace_skills_dir`
+- [x] AO3 `match_skills`（关键词/描述得分、上限 2、modes 过滤）+ `skill_prompt` 注入片段 + `skill_summary`
+- [x] AO4 `tests/test_skills.py`（解析/括号列表/容错/合并优先级/匹配排序与上限/模式过滤/注入片段/摘要与路径）
+
+## AP. 迭代 9 切片 9.2 技能注入与命令（仅显式指定）
+
+- [ ] AP1 `run(skills=)` 注入 system（仅显式传入；chat 模式仍过滤 modes）；无自动匹配
+- [ ] AP2 `/events` 增 `skill` 参数（逗号分隔多技能、未知容错）；`skill_loaded` 事件
+- [ ] AP3 CLI `--skill NAME`（可重复）/`--list-skills`；测试（注入/多技能/未知容错/CLI）
+
+## AQ. 迭代 9 切片 9.3 事件与技能管理 UI
+
+- [ ] AQ1 前端「📚 技能装载」note 块；重放可见
+- [ ] AQ2 `GET/POST/PUT/DELETE /skills`（工作区级 CRUD、越界防护、只读标注）
+- [ ] AQ3 `/skills` 命令浮层（浏览/选择/✎编辑/🗑删除/只读标签）+ 顶栏技能入口；测试
+
+## AR. 迭代 9 切片 9.4 内置技能
+
+- [ ] AR1 内置 python-testing / code-review / web-frontend（SKILL.md + 资源）
+- [ ] AR2 真实冒烟：关键词任务自动装载 + 答复体现规范
+
+## AS. 迭代 9 切片 9.5 集成回归
+
+- [ ] AS1 全量回归（pytest/CLI/REPL/Web）
+- [ ] AS2 真实冒烟（自动匹配 + 手动 /skill + chat 共存）
+- [ ] AS3 证据入 AGENT_LOG，迭代 9 放行

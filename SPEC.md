@@ -233,6 +233,16 @@ coding-agent/
 5. **输入栏模式按钮**：输入框左侧胶囊按钮（🤖 Agent / 💬 Chat）点击切换并 localStorage 持久化（顶栏切换移除）。
 6. **斜杠命令浮层**：输入 `/` 弹出 `/goal`、`/plan` 选择浮层（图标 + 描述、前缀过滤、悬停/选中高亮、↑↓/Enter/Esc 键盘导航、点击插入）。
 
+## 30. 迭代 9（Skills 模块）
+
+> 参考 Claude Code 的 `SKILL.md` 与 DSH `packages/skill`；技能即文件，实时加载生效。
+
+1. **技能模型**：技能 = 目录 + `SKILL.md`（轻量 frontmatter：name/description/keywords/modes + 指南正文，零新依赖；正文限 4000 字）。
+2. **三级目录（就近覆盖，按 name 去重）**：内置 `skills/`（只读，随发行）< `SKILLS_DIR` 外部目录（只读，跨项目共享）< 工作区 `<workdir>/.codeagent/skills/`（可写，用户增删改，文件树可见）。
+3. **生命周期（增删改 = 文件操作）**：新增 = 表单（POST /skills）或直建目录；删除 = 浮层 🗑（DELETE /skills/<name>，仅工作区级可删、越界防护）或删目录；改动 = Monaco 编辑保存（复用 /save-file）或表单（PUT /skills/<name>）；每次 run 实时加载，改完即生效。
+4. **使用（仅显式指定，无自动匹配）**：技能装载必须由用户显式指定——`/skill <name>` 强制装载（可多次/逗号分隔多个）、`/skills` 浮层浏览选择、CLI `--skill NAME`（可重复）；任务文本不做自动关键词匹配（`match_skills` 保留为后续「推荐技能」预留，不接入 run）。
+5. **切片**：9.1 存储与解析（已完成）；9.2 注入与命令（显式指定注入 + skill_loaded 事件 + CLI）；9.3 事件与技能管理 UI（skill_loaded 块 + /skills CRUD 端点与浮层）；9.4 内置技能（python-testing / code-review / web-frontend）；9.5 集成回归。
+
 ## 28. 迭代 8 · 切片 8.1 补充（/goal 斜杠命令）
 
 1. **对话输入命令**：输入 `/goal <任务>` 时本回合进入目标模式（任务文本去掉前缀，EventSource 带 `goal=1`）；仅输入 `/goal` 时占位符闪烁用法提示；`/plan`、`/chat` 命令后续切片实现。

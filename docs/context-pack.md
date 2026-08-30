@@ -1,16 +1,16 @@
 # context-pack.md — 当前阶段上下文包
 
-> 当前阶段：**迭代 8 · 切片 8.6（chat / agent 双模式 + /plan 命令）**
+> 当前阶段：**迭代 9 · 切片 9.1（技能存储与解析）**
 
 ## 当前阶段目标
 
-chat 模式 = 只读工具集（read_file/list_directory/search_content/web_search，不可编辑/执行/委派），agent 模式（默认）= 全部工具；`run(mode=, tools=)` 与 `tool_schemas_for` 参数化；顶栏分段模式切换（localStorage）；`/chat` 按条强制 chat、`/goal` `/plan` 强制 agent；`/plan` = make_plan → `plan` 事件（📐 执行计划块）→ 计划注入执行；`/events` 增 mode/plan 参数。
+新建 `agent/skills.py`：`Skill` 数据类 + `SKILL.md` 轻量 frontmatter 解析（name/description/keywords/modes + 正文，零新依赖，坏文件容错跳过，正文 4000 字截断）；三级目录合并（内置 `skills/` < `SKILLS_DIR` < 工作区 `<workdir>/.codeagent/skills`，就近覆盖去重）；`match_skills`（关键词 +3/描述词 +1 得分、上限 2、modes 过滤）；`skill_prompt` 注入片段。
 
 ## 必须读
 
-- `SPEC.md` 第 29 节（本切片范围）
-- `agent/loop.py`（`run` 签名与 SYSTEM_PROMPT）、`agent/plan.py`（`make_plan`）、`agent/tools/__init__.py`（`tool_schemas`）、`agent/web.py`（`_handle_events`/`parseCommand`/`sendTask`/顶栏 HTML）
-- `tests/test_loop.py`、`tests/test_web.py`、`tests/test_tools.py`
+- `SPEC.md` 第 30 节（迭代 9 计划）
+- `agent/skills.py`（新建）、参考 `agent/tools/base.py`（dataclass 风格）
+- `tests/test_skills.py`（新建）
 
 ## 不得读 / 不得改
 
@@ -18,5 +18,5 @@ chat 模式 = 只读工具集（read_file/list_directory/search_content/web_sear
 
 ## 输出要求
 
-- 产出：`agent/tools/__init__.py`、`agent/loop.py`、`agent/web.py`、测试
-- 验收：`pytest -q` 全绿（约 129）；`node --check`；DOM 垫片（模式切换/命令）；冒烟标记；真实冒烟（chat 只读 + plan 事件）
+- 产出：`agent/skills.py`、`tests/test_skills.py`
+- 验收：`pytest -q` 全绿（约 132）；`compileall`
