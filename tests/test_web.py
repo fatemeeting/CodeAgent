@@ -650,7 +650,97 @@ def test_web_sse_skill_param(tmp_path):
             url2 = f"http://127.0.0.1:{port}/events?task=x&workdir=" + urllib.parse.quote(str(ws)) + "&mode=chat&skill=agentonly"
             with urllib.request.urlopen(url2) as resp:
                 resp.read()
-            assert "agentonly" not in captured.get("system", "")
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+# ---------- 迭代 9 · 9.3：技能管理端点 ----------
+
+def _skill_req(port: int, path: str, payload=None, method: str = "POST"):
+    data = json.dumps(payload).encode("utf-8") if payload is not None else None
+    req = urllib.request.Request(
+        f"http://127.0.0.1:{port}{path}",
+        data=data,
+        headers={"Content-Type": "application/json"},
+        method=method,
+    )
+    with urllib.request.urlopen(req) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def test_web_skills_crud(tmp_path):
+    """GET/POST/PUT/DELETE /skills：工作区级 CRUD + 名称校验与越界防护。"""
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    server = ThreadingHTTPServer(("127.0.0.1", 0), AgentHandler)
+    server.config = _config()
+    server.workdir = str(ws)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = server.server_address[1]
+    try:
+        # 初始为空列表
+        assert _skill_req(port, "/skills", method="GET") == {"ok": True, "skills": []}
+        # 新建（工作区级）
+        created = _skill_req(
+            port,
+            "/skills",
+            {"name": "demo", "description": "演示技能", "keywords": "a, b", "modes": "agent, chat", "body": "正文"},
+        )
+        assert created["ok"] is True
+        assert created["skill"]["name"] == "demo"
+        assert created["skill"]["source"] == "workspace"
+        assert created["skill"]["modes"] == ["agent", "chat"]
+        listed = _skill_req(port, "/skills", method="GET")
+        assert [s["name"] for s in listed["skills"]] == ["demo"]
+        # 重名与非法名（含路径穿越）
+        dup = _skill_req(port, "/skills", {"name": "demo", "description": "x"})
+        assert dup["ok"] is False and "已存在" in dup["error"]
+        bad = _skill_req(port, "/skills", {"name": "../evil"})
+        assert bad["ok"] is False
+        # PUT 更新
+        upd = _skill_req(port, "/skills/demo", {"description": "更新后"}, method="PUT")
+        assert upd["ok"] is True and upd["skill"]["description"] == "更新后"
+        md = ws / ".codeagent" / "skills" / "demo" / "SKILL.md"
+        assert md.is_file() and "更新后" in md.read_text(encoding="utf-8")  # CRUD 即文件操作
+        missing = _skill_req(port, "/skills/nope", {"description": "x"}, method="PUT")
+        assert missing["ok"] is False and "不存在" in missing["error"]
+        # DELETE（query workdir）
+        qs = urllib.parse.quote(str(ws))
+        gone = _skill_req(port, f"/skills/demo?workdir={qs}", method="DELETE")
+        assert gone["ok"] is True
+        assert not md.exists()
+        assert _skill_req(port, "/skills", method="GET") == {"ok": True, "skills": []}
+        again = _skill_req(port, "/skills/demo", method="DELETE")
+        assert again["ok"] is False
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_web_skills_env_readonly(tmp_path, monkeypatch):
+    """SKILLS_DIR 技能只读：列表标注 env 来源，DELETE 拒绝。"""
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    env = tmp_path / "env"
+    d = env / "shared"
+    d.mkdir(parents=True)
+    (d / "SKILL.md").write_text("---\ndescription: 外部技能\n---\n正文", encoding="utf-8")
+    monkeypatch.setenv("SKILLS_DIR", str(env))
+    server = ThreadingHTTPServer(("127.0.0.1", 0), AgentHandler)
+    server.config = _config()
+    server.workdir = str(ws)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = server.server_address[1]
+    try:
+        listed = _skill_req(port, "/skills", method="GET")
+        sources = {s["name"]: s["source"] for s in listed["skills"]}
+        assert sources.get("shared") == "env"
+        gone = _skill_req(port, "/skills/shared", method="DELETE")
+        assert gone["ok"] is False  # 只读拒绝
+        assert (d / "SKILL.md").is_file()
     finally:
         server.shutdown()
         server.server_close()

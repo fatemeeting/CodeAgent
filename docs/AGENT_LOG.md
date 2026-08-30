@@ -910,3 +910,19 @@
   - `pytest -q` → **135 passed**（127 + 8 新增）；`compileall` EXIT=0
   - 过程中修正 2 处测试自身问题（空技能写入文本非空；Windows 路径分隔符断言）
 - **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
+
+## 迭代 9 切片 9.3：事件与技能管理 UI
+
+- **时间**：2026-08-30
+- **给 Agent 的任务**：切片 9.3——skill_loaded 前端块 + /skills 技能管理（CRUD 端点 + 浮层 + 顶栏入口）
+- **Agent 修改了什么**：
+  - `agent/skills.py`：新增工作区级 CRUD 助手——`valid_skill_name`（仅字母/数字/-/_、1–40 字符，防路径穿越）、`save_workspace_skill` / `update_workspace_skill`（写 `<workdir>/.codeagent/skills/<name>/SKILL.md`，UTF-8 无 BOM，重名/不存在报错）、`delete_workspace_skill`（`resolve` + `is_relative_to` 越界防护，仅工作区根内可删）；`_format_skill_md` 序列化表单为 frontmatter
+  - `agent/web.py` 后端：`GET /skills?workdir=`（列表含 source 只读标注）、`POST /skills`（新建）、`POST/PUT /skills/<name>`（更新，do_PUT 新路由）、`DELETE /skills/<name>?workdir=`（仅工作区级，内置/SKILLS_DIR 拒绝）；`_parse_skill_body` 兼容字符串/数组两种 keywords/modes
+  - `agent/web.py` 前端：`skill_loaded` 事件 →「📚 技能装载 · name」note 折叠块（随 trace 持久化重放可见）；`/skills` 命令浮层（浏览列表/点击技能名填入 `/skill <name>`/✎编辑/🗑两步确认删除/内置与 SKILLS_DIR「只读」标签/＋新建表单）；顶栏「📚 技能」入口；`/skill <name> [任务]` 命令（仅技能名 → 默认确认话术；强制 agent 模式；URL 带 `&skill=`）；CMD_ITEMS/parseCommand 扩展
+  - **真 bug 修复**：Node 垫片冒烟发现 `saveSkill` 新建时漏发 `name` 字段 → POST 必失败；已补 `if (!isEdit) payload.name = name`
+  - 测试：`test_skills.py` +3（名称校验/保存-更新-删除回环/非法名与越界删除）、`test_web.py` +2（HTTP 全链路 CRUD + 重名/穿越/PUT 缺省/删除幂等、SKILLS_DIR 只读拒绝）
+- **检查证据**：
+  - `pytest -q` → **144 passed**（139 + 5）；`compileall` EXIT=0
+  - `node --check` 提取前端脚本 EXIT=0；Node DOM 垫片冒烟 **21/21 PASS**（parseCommand ×4、CMD_ITEMS、skill_loaded 块 ×3、面板渲染与只读标签 ×4、POST/PUT/删除两步确认 ×3、EventSource skill/任务/模式 ×4）
+  - 真实服务冒烟（127.0.0.1:8893，临时工作区）：GET 空列表 → POST 新建 → 非法名 `../evil` 拒绝 → PUT 更新 → GET 列表 source=workspace → 磁盘文件为 UTF-8 无 BOM（前 3 字节 2D 2D 2D，中文完好）→ DELETE 成功 → 二次 DELETE 拒绝 → 列表回空；curl UTF-8 文件体复验中文往返无乱码
+- **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）

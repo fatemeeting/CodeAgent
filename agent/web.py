@@ -21,7 +21,13 @@ from .llm import LLMClient
 from .loop import run
 from .plan import make_plan
 from .sessions import SessionStore
-from .skills import load_skills
+from .skills import (
+    delete_workspace_skill,
+    load_skills,
+    save_workspace_skill,
+    skill_summary,
+    update_workspace_skill,
+)
 from .tools import READ_ONLY_TOOL_NAMES, tool_schemas_for
 from .tools.shell_tools import execute_command, is_dangerous
 
@@ -77,6 +83,22 @@ INDEX_HTML = """<!DOCTYPE html>
   .sess-bar select { border: 1px solid var(--border-l1); background: var(--bg); color: var(--text); border-radius: 8px; padding: 6px 10px; font-size: 14px; max-width: 240px; }
   .sess-bar button { border: none; background: var(--bg); color: var(--muted); border-radius: 8px; padding: 7px 12px; cursor: pointer; font-size: 14px; line-height: 1; white-space: nowrap; }
   .sess-bar button:hover { background: var(--accent-soft); color: var(--accent); }
+  .skills-btn { border: none; background: var(--bg); color: var(--muted); border-radius: 8px; padding: 7px 12px; cursor: pointer; font-size: 14px; line-height: 1; white-space: nowrap; margin-right: 8px; }
+  .skills-btn:hover { background: var(--accent-soft); color: var(--accent); }
+  /* 技能面板（迭代 9 · 9.3） */
+  .skill-card { width: 680px; }
+  .skill-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border-l1); border-radius: 10px; background: var(--bg); }
+  .skill-name { font-weight: 600; font-size: 14px; flex-shrink: 0; }
+  .skill-desc { flex: 1; color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .skill-tag { font-size: 12px; color: var(--muted); border: 1px solid var(--border-l1); border-radius: 6px; padding: 1px 7px; flex-shrink: 0; }
+  .skill-tag.ws { color: var(--accent); border-color: var(--accent); }
+  .skill-actions { flex-shrink: 0; }
+  .skill-actions button { border: none; background: none; cursor: pointer; font-size: 14px; color: var(--muted); padding: 2px 5px; }
+  .skill-actions button:hover { color: var(--accent); }
+  .skill-actions button.del:hover { color: var(--err); }
+  .skill-form input, .skill-form textarea { width: 100%; border: 1px solid var(--border-l1); border-radius: 8px; padding: 8px 10px; font-size: 13px; margin-bottom: 8px; font-family: inherit; background: var(--bg); color: var(--text); box-sizing: border-box; }
+  .skill-form textarea { min-height: 130px; resize: vertical; font-family: Consolas, monospace; }
+  .skill-form .skill-err { color: var(--err); font-size: 13px; min-height: 18px; }
   #content { flex: 1; min-height: 0; height: 0; display: flex; overflow: hidden; }
   .pane { display: flex; flex-direction: column; overflow: hidden; min-height: 0; min-width: 0; }
   #pane-left { width: 240px; }
@@ -216,6 +238,7 @@ INDEX_HTML = """<!DOCTYPE html>
       <button id="sess-rename" onclick="renameSession()" title="重命名当前会话">重命名</button>
       <button id="sess-del" onclick="deleteSession()" title="删除当前会话">删除</button>
     </div>
+    <button class="skills-btn" onclick="openSkillsPanel()" title="浏览与管理技能（仅工作区技能可增删改）">📚 技能</button>
     <div class="ws-chip">
       <span id="ws-name"></span>
       <button onclick="openManager()" title="切换工作区">🔄 切换</button>
@@ -373,6 +396,175 @@ function openManager() {
 function closeManager() {
   document.getElementById('modal').style.display = 'none';
   activeManager = document.getElementById('welcome');
+}
+
+/* ---------- 技能管理（迭代 9 · 9.3：浏览/新建/编辑/删除 + 只读标注） ---------- */
+let skillDelTimer = null;
+
+function skillSrcLabel(src) {
+  if (src === 'workspace') return '工作区';
+  if (src === 'env') return 'SKILLS_DIR';
+  return '内置';
+}
+
+async function openSkillsPanel() {
+  document.getElementById('modal').style.display = 'flex';
+  const card = document.getElementById('modal-card');
+  card.innerHTML = `
+    <div class="mgr-card skill-card">
+      <div class="mgr-title">📚 技能</div>
+      <div class="mgr-sub">技能仅在你显式指定时装载（/skill <name>）；内置与 SKILLS_DIR 只读，工作区技能可增删改</div>
+      <div id="skill-list"></div>
+      <div class="mgr-divider"></div>
+      <div style="display:flex; gap:8px;">
+        <button class="btn-accent" onclick="showSkillForm()">＋ 新建技能</button>
+        <button class="mgr-cancel" onclick="closeManager()">关闭</button>
+      </div>
+    </div>`;
+  await refreshSkillList();
+}
+
+async function refreshSkillList() {
+  const box = document.getElementById('skill-list');
+  if (!box) return;
+  box.innerHTML = '<div class="mgr-status">加载中…</div>';
+  try {
+    const resp = await fetch('/skills?workdir=' + encodeURIComponent(state.workspace || ''));
+    const data = await resp.json();
+    if (!data.ok) { box.innerHTML = '<div class="mgr-status err">✗ ' + (data.error || '加载失败') + '</div>'; return; }
+    const skills = data.skills || [];
+    if (!skills.length) { box.innerHTML = '<div class="mgr-status">暂无技能</div>'; return; }
+    box.innerHTML = '';
+    skills.forEach(renderSkillRow);
+  } catch (e) {
+    box.innerHTML = '<div class="mgr-status err">✗ 请求失败：' + e + '</div>';
+  }
+}
+
+function renderSkillRow(s) {
+  const box = document.getElementById('skill-list');
+  if (!box) return;
+  const row = document.createElement('div');
+  row.className = 'skill-row';
+  const nm = document.createElement('span');
+  nm.className = 'skill-name';
+  nm.textContent = '📘 ' + s.name;
+  nm.title = '/skill ' + s.name + '（点击填入输入框）';
+  nm.style.cursor = 'pointer';
+  nm.onclick = function () {
+    closeManager();
+    const input = document.getElementById('chat-input');
+    input.value = '/skill ' + s.name + ' ';
+    input.focus();
+  };
+  const ds = document.createElement('span');
+  ds.className = 'skill-desc';
+  ds.textContent = s.description || '（无描述）';
+  ds.title = 'modes: ' + ((s.modes || []).join(', ') || 'agent');
+  const tag = document.createElement('span');
+  tag.className = 'skill-tag' + (s.source === 'workspace' ? ' ws' : '');
+  tag.textContent = skillSrcLabel(s.source) + (s.source !== 'workspace' ? ' · 只读' : '');
+  row.appendChild(nm);
+  row.appendChild(ds);
+  row.appendChild(tag);
+  if (s.source === 'workspace') {
+    const acts = document.createElement('span');
+    acts.className = 'skill-actions';
+    const ed = document.createElement('button');
+    ed.textContent = '✎';
+    ed.title = '编辑技能 ' + s.name;
+    ed.onclick = function () { showSkillForm(s); };
+    const del = document.createElement('button');
+    del.className = 'del';
+    del.textContent = '🗑';
+    del.title = '删除技能 ' + s.name;
+    del.onclick = function () { askDeleteSkill(s.name, del); };
+    acts.appendChild(ed);
+    acts.appendChild(del);
+    row.appendChild(acts);
+  }
+  box.appendChild(row);
+}
+
+function showSkillForm(existing) {
+  const card = document.getElementById('modal-card');
+  const isEdit = !!existing;
+  card.innerHTML = `
+    <div class="mgr-card skill-card skill-form">
+      <div class="mgr-title">${isEdit ? '✎ 编辑技能' : '＋ 新建技能'}</div>
+      <div class="mgr-sub">技能 = 目录 + SKILL.md；保存即写入工作区 .codeagent/skills/，下次运行立即生效</div>
+      <input id="sk-name" placeholder="技能名（字母/数字/-/_，1–40 字符，如 python-testing）">
+      <input id="sk-desc" placeholder="一句话描述，如：Python 单元测试规范">
+      <input id="sk-kw" placeholder="关键词，逗号分隔，如：pytest, 单测, 测试">
+      <input id="sk-modes" placeholder="适用模式，逗号分隔（默认 agent）">
+      <textarea id="sk-body" placeholder="指南正文（≤4000 字）"></textarea>
+      <div class="skill-err" id="sk-err"></div>
+      <div style="display:flex; gap:8px;">
+        <button class="btn-accent" onclick="saveSkill(${isEdit ? 'true' : 'null'})">保存</button>
+        <button class="btn" onclick="openSkillsPanel()">取消</button>
+      </div>
+    </div>`;
+  const nameEl = document.getElementById('sk-name');
+  if (isEdit) { nameEl.value = existing.name; nameEl.disabled = true; }
+  document.getElementById('sk-desc').value = isEdit ? (existing.description || '') : '';
+  document.getElementById('sk-kw').value = isEdit ? (existing.keywords || []).join(', ') : '';
+  document.getElementById('sk-modes').value = isEdit ? (existing.modes || []).join(', ') : '';
+  document.getElementById('sk-body').value = isEdit ? (existing.body || '') : '';
+}
+
+async function saveSkill(isEdit) {
+  const nameEl = document.getElementById('sk-name');
+  const errEl = document.getElementById('sk-err');
+  const name = (nameEl ? nameEl.value : '').trim();
+  const payload = {
+    workdir: state.workspace || '',
+    description: document.getElementById('sk-desc').value,
+    keywords: document.getElementById('sk-kw').value,
+    modes: document.getElementById('sk-modes').value,
+    body: document.getElementById('sk-body').value,
+  };
+  if (!isEdit) payload.name = name;
+  try {
+    const resp = await fetch(isEdit ? ('/skills/' + encodeURIComponent(name)) : '/skills', {
+      method: isEdit ? 'PUT' : 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload),
+    });
+    const data = await resp.json();
+    if (data.ok) { openSkillsPanel(); return; }
+    if (errEl) errEl.textContent = '✗ ' + (data.error || '保存失败');
+  } catch (e) {
+    if (errEl) errEl.textContent = '✗ 请求失败：' + e;
+  }
+}
+
+function askDeleteSkill(name, btn) {
+  if (btn.dataset.armed === '1') {
+    btn.dataset.armed = '';
+    btn.textContent = '🗑';
+    clearTimeout(skillDelTimer);
+    doDeleteSkill(name);
+    return;
+  }
+  btn.dataset.armed = '1';
+  btn.textContent = '确认删除？';
+  clearTimeout(skillDelTimer);
+  skillDelTimer = setTimeout(function () {
+    btn.dataset.armed = '';
+    btn.textContent = '🗑';
+  }, 3000);
+}
+
+async function doDeleteSkill(name) {
+  try {
+    const resp = await fetch('/skills/' + encodeURIComponent(name) + '?workdir=' + encodeURIComponent(state.workspace || ''), {method: 'DELETE'});
+    const data = await resp.json();
+    if (!data.ok) {
+      const box = document.getElementById('skill-list');
+      if (box) box.insertAdjacentHTML('afterbegin', '<div class="mgr-status err">✗ ' + (data.error || '删除失败') + '</div>');
+    }
+  } catch (e) { /* 列表刷新兜底 */ }
+  openSkillsPanel();
 }
 
 let chatMessages = [];
@@ -923,6 +1115,15 @@ function handleEvent(ev, t) {
       pb.body.textContent = ev.plan || '';
       break;
     }
+    case 'skill_loaded': {
+      const kb = createTblk(t.traceEl, 'note');
+      kb.icon = kb.head.children[0];
+      kb.icon.textContent = '📚';
+      kb.title.textContent = '技能装载 · ' + (ev.name || '');
+      kb.summary.textContent = oneLine(ev.description || '已装载技能，按其规范执行', 60);
+      kb.body.textContent = (ev.description || '') + '\\n（技能仅在你显式指定时装载）';
+      break;
+    }
     case 'turn_end': {
       if (ev.interrupted) {
         const ib = createTblk(t.traceEl, 'warn');
@@ -1082,6 +1283,8 @@ function renderMarkdown(text) {
 const CMD_ITEMS = [
   {cmd: '/goal', icon: '🎯', name: '/goal', desc: '目标模式：长任务自动续跑'},
   {cmd: '/plan', icon: '📐', name: '/plan', desc: '先制定计划再执行'},
+  {cmd: '/skill', icon: '📚', name: '/skill', desc: '显式装载技能执行任务'},
+  {cmd: '/skills', icon: '🗂', name: '/skills', desc: '浏览与管理技能'},
 ];
 
 function parseCommand(text) {
@@ -1097,6 +1300,13 @@ function parseCommand(text) {
   if (t === '/chat' || t.startsWith('/chat ')) {
     const rest = t === '/chat' ? '' : t.slice('/chat'.length).trim();
     return {cmd: 'chat', task: rest};
+  }
+  if (t === '/skills' || t.startsWith('/skills ')) {  // 先于 /skill 判断
+    return {cmd: 'skills', task: t === '/skills' ? '' : t.slice('/skills'.length).trim()};
+  }
+  if (t === '/skill' || t.startsWith('/skill ')) {
+    const rest = t === '/skill' ? '' : t.slice('/skill'.length).trim();
+    return {cmd: 'skill', task: rest};
   }
   return {cmd: '', task: t};
 }
@@ -1176,13 +1386,24 @@ function buildCmdPop() {
 async function sendTask() {
   const input = document.getElementById('chat-input');
   const parsed = parseCommand(input.value);
-  const task = parsed.task;
-  const goalMode = parsed.cmd === 'goal';
-  const planMode = parsed.cmd === 'plan';
-  const chatCmd = parsed.cmd === 'chat';
+  const cmd = parsed.cmd;
+  if (cmd === 'skills') { input.value = ''; openSkillsPanel(); return; }
+  let task = parsed.task;
+  let skillParam = '';
+  if (cmd === 'skill') {
+    const sp = parsed.task.indexOf(' ');
+    const name = sp === -1 ? parsed.task : parsed.task.slice(0, sp);
+    const extra = sp === -1 ? '' : parsed.task.slice(sp + 1).trim();
+    if (!name) { flashHint(input, '/skill 需要技能名，例如：/skill python-testing 写单测'); return; }
+    skillParam = name;
+    task = extra || ('请确认已装载技能 ' + name + '，并简要说明你将如何应用它');
+  }
+  const goalMode = cmd === 'goal';
+  const planMode = cmd === 'plan';
+  const chatCmd = cmd === 'chat';
   let mode = state.mode;
   if (chatCmd) mode = 'chat';
-  if (goalMode || planMode) mode = 'agent';  // /goal 与 /plan 仅 agent 模式
+  if (goalMode || planMode || skillParam) mode = 'agent';  // 这三类命令仅 agent 模式
   if (!task) {
     if (goalMode) flashHint(input, '/goal 需要跟随任务，例如：/goal 实现用户登录功能');
     if (planMode) flashHint(input, '/plan 需要跟随任务，例如：/plan 实现用户登录功能');
@@ -1198,7 +1419,7 @@ async function sendTask() {
   const idx = chatMessages.length - 1;
   await ensureSession(task);
   saveMessages();
-  const es = new EventSource('/events?task=' + encodeURIComponent(task) + '&workdir=' + encodeURIComponent(state.workspace) + '&session=' + encodeURIComponent(currentSessionId || '') + '&mode=' + encodeURIComponent(mode) + (goalMode ? '&goal=1' : '') + (planMode ? '&plan=1' : ''));
+  const es = new EventSource('/events?task=' + encodeURIComponent(task) + '&workdir=' + encodeURIComponent(state.workspace) + '&session=' + encodeURIComponent(currentSessionId || '') + '&mode=' + encodeURIComponent(mode) + (goalMode ? '&goal=1' : '') + (planMode ? '&plan=1' : '') + (skillParam ? '&skill=' + encodeURIComponent(skillParam) : ''));
   const t = newTurnState(agent.bubble, agent.traceEl);
   t.statusEl = agent.status;
   es.onmessage = function (e) {
@@ -1608,6 +1829,8 @@ class AgentHandler(BaseHTTPRequestHandler):
             self._handle_file()
         elif self.path.startswith("/sessions"):
             self._handle_sessions_get()
+        elif self.path.startswith("/skills"):
+            self._handle_skills_get()
         else:
             self.send_error(404)
 
@@ -1862,14 +2085,32 @@ class AgentHandler(BaseHTTPRequestHandler):
             self._handle_save_file()
         elif self.path.startswith("/sessions"):
             self._handle_sessions_post()
+        elif self.path.startswith("/skills"):
+            self._handle_skills_post()
         else:
             self.send_error(404)
 
-    def do_DELETE(self):  # noqa: N802 - 会话删除
+    def do_PUT(self):  # noqa: N802 - 技能更新（PUT /skills/<name>）
+        parts = [p for p in urllib.parse.urlparse(self.path).path.split("/") if p]
+        if len(parts) == 2 and parts[0] == "skills":
+            self._handle_skills_post(require_existing=True)
+        else:
+            self.send_error(404)
+
+    def do_DELETE(self):  # noqa: N802 - 会话删除 + 技能删除
         parts = [p for p in urllib.parse.urlparse(self.path).path.split("/") if p]
         if len(parts) == 2 and parts[0] == "sessions":
             ok = self._sessions().delete_session(parts[1])
             result = {"ok": True} if ok else {"ok": False, "error": f"会话不存在：{parts[1]}"}
+        elif len(parts) == 2 and parts[0] == "skills":
+            query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            workdir = (query.get("workdir") or [None])[0] or self.server.workdir
+            ok = delete_workspace_skill(workdir, parts[1])
+            result = (
+                {"ok": True}
+                if ok
+                else {"ok": False, "error": f"技能不存在或为只读（仅工作区级可删除）：{parts[1]}"}
+            )
         else:
             self.send_error(404)
             return
@@ -1942,6 +2183,59 @@ class AgentHandler(BaseHTTPRequestHandler):
                     if session is not None
                     else {"ok": False, "error": f"会话不存在：{parts[1]}"}
                 )
+            else:
+                self.send_error(404)
+                return
+        except Exception as exc:  # noqa: BLE001
+            result = {"ok": False, "error": str(exc)}
+        self._write_json(result)
+
+    # ---------- 技能端点（迭代 9 · 9.3：工作区级 CRUD + 只读标注） ----------
+    def _handle_skills_get(self) -> None:
+        """GET /skills?workdir= 技能列表（含 source 只读标注）。"""
+        query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        workdir = (query.get("workdir") or [None])[0] or self.server.workdir
+        try:
+            result = {"ok": True, "skills": skill_summary(load_skills(workdir))}
+        except Exception as exc:  # noqa: BLE001
+            result = {"ok": False, "error": str(exc)}
+        self._write_json(result)
+
+    @staticmethod
+    def _parse_skill_body(body: dict) -> dict:
+        """解析技能表单字段（POST 新建 / PUT 更新共用）。"""
+        keywords = body.get("keywords") or []
+        if isinstance(keywords, str):
+            keywords = [k.strip() for k in keywords.replace("，", ",").split(",") if k.strip()]
+        modes = body.get("modes") or []
+        if isinstance(modes, str):
+            modes = [m.strip() for m in modes.replace("，", ",").split(",") if m.strip()]
+        return {
+            "description": str(body.get("description") or "").strip(),
+            "keywords": keywords if isinstance(keywords, list) else [],
+            "modes": modes if isinstance(modes, list) else [],
+            "body": str(body.get("body") or ""),
+        }
+
+    def _handle_skills_post(self, require_existing: bool = False) -> None:
+        """POST /skills 新建；POST/PUT /skills/<name> 更新（仅工作区级）。"""
+        parts = [p for p in urllib.parse.urlparse(self.path).path.split("/") if p]
+        length = int(self.headers.get("Content-Length", 0))
+        raw = json.loads(self.rfile.read(length) or b"{}")
+        if not isinstance(raw, dict):
+            raw = {}
+        workdir = str(raw.get("workdir") or self.server.workdir)
+        fields = self._parse_skill_body(raw)
+        try:
+            if require_existing and len(parts) != 2:
+                raise ValueError("PUT 仅支持 /skills/<name> 更新")
+            if len(parts) == 1:  # POST /skills 新建
+                name = str(raw.get("name") or "").strip()
+                skill = save_workspace_skill(workdir, name, **fields)
+                result = {"ok": True, "skill": skill}
+            elif len(parts) == 2:  # POST/PUT /skills/<name> 更新
+                skill = update_workspace_skill(workdir, parts[1], **fields)
+                result = {"ok": True, "skill": skill}
             else:
                 self.send_error(404)
                 return

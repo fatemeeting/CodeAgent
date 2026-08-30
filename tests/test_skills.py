@@ -2,13 +2,19 @@
 
 from pathlib import Path
 
+import pytest
+
 from agent.skills import (
     Skill,
     _load_dir,
+    delete_workspace_skill,
     load_skills,
     match_skills,
+    save_workspace_skill,
     skill_prompt,
     skill_summary,
+    update_workspace_skill,
+    valid_skill_name,
     workspace_skills_dir,
 )
 
@@ -115,3 +121,46 @@ def test_skill_summary_and_workspace_dir(tmp_path):
     assert [s["name"] for s in summary] == ["a", "b"]  # 按名排序
     ws = str(workspace_skills_dir(str(tmp_path))).replace("\\", "/")
     assert ws.endswith(".codeagent/skills")
+
+
+# ---------- 迭代 9 · 9.3：工作区级 CRUD 助手 ----------
+
+def test_valid_skill_name():
+    assert valid_skill_name("python-testing")
+    assert valid_skill_name("a")
+    assert valid_skill_name("x" * 40)
+    assert not valid_skill_name("")
+    assert not valid_skill_name("../evil")
+    assert not valid_skill_name("a/b")
+    assert not valid_skill_name("a\\b")
+    assert not valid_skill_name("..")
+    assert not valid_skill_name("x" * 41)
+    assert not valid_skill_name("中文名")
+
+
+def test_workspace_skill_save_update_delete(tmp_path):
+    summary = save_workspace_skill(tmp_path, "demo", "演示", ["pytest"], ["agent", "chat"], "正文")
+    assert summary["name"] == "demo" and summary["source"] == "workspace"
+    assert summary["description"] == "演示" and summary["modes"] == ["agent", "chat"]
+    md = tmp_path / ".codeagent" / "skills" / "demo" / "SKILL.md"
+    assert md.is_file() and "正文" in md.read_text(encoding="utf-8")
+    # 重名新建报错
+    with pytest.raises(ValueError):
+        save_workspace_skill(tmp_path, "demo", "重复")
+    # 更新覆盖；不存在报错
+    updated = update_workspace_skill(tmp_path, "demo", "新描述", [], ["agent"], "新正文")
+    assert updated["description"] == "新描述"
+    assert "新正文" in md.read_text(encoding="utf-8")
+    with pytest.raises(ValueError):
+        update_workspace_skill(tmp_path, "ghost", "x")
+    # 删除后二次删除返回 False
+    assert delete_workspace_skill(tmp_path, "demo") is True
+    assert not md.exists()
+    assert delete_workspace_skill(tmp_path, "demo") is False
+
+
+def test_workspace_skill_invalid_names(tmp_path):
+    for bad in ["", "../evil", "a/b", "..", "x" * 41, "中文"]:
+        with pytest.raises(ValueError):
+            save_workspace_skill(tmp_path, bad, "x")
+    assert delete_workspace_skill(tmp_path, "../evil") is False  # 越界删除拒绝
