@@ -1,22 +1,21 @@
 # context-pack.md — 当前阶段上下文包
 
-> 当前阶段：**迭代 8 · 切片 8.4（上下文压缩 compaction）**
+> 当前阶段：**迭代 8 · 切片 8.5（集成回归，迭代 8 收尾）**
 
 ## 当前阶段目标
 
-`loop.py` 新增 `_maybe_compact(client, config, messages, emit)`：仅 Web（emit 非空）且历史 ≥ 80% `max_context_tokens` 且消息 > 8 条时——把「system 之后、最近 6 条之前」的 user/assistant 旧轮次交给 LLM 压缩为 ≤300 字摘要，替换为 `[上下文压缩摘要] …` assistant 消息；发 `compact {before, after, summary}` 事件；压缩失败回退旧截断逻辑；随后照常 `truncate_history`。CLI（emit None）不启用（零回归）。前端渲染「📦 上下文压缩」折叠块（`before → after tokens` meta + 摘要正文）。
+① AM1 真实任务冒烟：goal 完成路径（`goal=1`，goal_start/goal_end + 产物落盘）、goal 受阻路径（goal_blocked 或非零退出码 + [DONE]）、复合任务（todo + web_search + delegate_subagent 至少触发 todo 与工具结果）、web_search 直连复验；② AM2 全量回归：pytest、compileall、--help、REPL /quit；③ AM3 证据入 AGENT_LOG、CHECKLIST 迭代 8 全勾选放行。
 
 ## 必须读
 
-- `SPEC.md` 第 27 节切片 8.4
-- `agent/loop.py`（`run_turn` 每轮开头的 truncate 调用点）、`agent/context.py`（`estimate_tokens`/`_message_text`）、`agent/web.py`（`handleEvent`）
-- `tests/test_loop.py`
+- `CHECKLIST.md` AM 节（8.5 验收项）
+- `agent/web.py`（`/events` 参数与事件类型）、`agent/loop.py`（goal/compact/todo/subagent 事件点）
 
 ## 不得读 / 不得改
 
-- `.env`（真实凭据）
+- `.env` 内容（真实凭据；仅应用自身经 `Config.from_env()` 加载）
 
 ## 输出要求
 
-- 产出：`agent/loop.py`、`agent/web.py`、`tests/test_loop.py`
-- 验收：`pytest -q` 全绿（约 124）；`node --check`；DOM 垫片（压缩块）；冒烟标记；CLI 回归（emit None 不触发）
+- 产出：冒烟脚本（临时）+ 证据记录（AGENT_LOG）
+- 验收：pytest 123 全绿；3~4 次真实冒烟断言成立；CLI/REPL 无回归

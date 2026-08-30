@@ -813,3 +813,23 @@
   - 冒烟标记（`_maybe_compact`/`COMPACT_THRESHOLD`/`[上下文压缩摘要]`/`case 'compact'` 等）就位；`node --check` 通过
   - Node DOM 垫片：压缩块标题/📦/`5000 → 800 tokens` meta/展开正文 → **JSFLOW 8.4 compact OK**
 - **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
+
+## 迭代 8 切片 8.5：集成回归（迭代 8 收尾）
+
+- **时间**：2026-08-30
+- **给 Agent 的任务**：迭代 8 集成回归——真实任务冒烟 ×4 + 全量回归 + 证据收尾
+- **检查证据**：
+  - **AM1 真实冒烟**（真实 DeepSeek API，经 `/events` 事件流端到端）：
+    - goal 完成：「在 goal_demo.txt 写入 OK 并验证，以『完成：』开头汇报」→ `goal_start → 工具轮 ×2 → goal_end{done} → turn_end → [DONE]`，文件落盘含 OK ✓
+    - goal 受阻：「执行不存在的命令，受阻以『受阻：』开头说明」→ `goal_blocked → goal_end → [DONE]` ✓
+    - 复合任务（todo + web_search + delegate_subagent）：`todo` 事件 ×3、工具集 {todo_write, read_file, web_search, delegate_subagent}、`subagent_start/subagent_end`、`sub_demo.txt` 落盘、无 error，`[DONE]` 收尾 ✓
+    - web_search 直连复验：`[1] Welcome to Python.org` ✓
+  - **AM2 回归**：`pytest -q` → **123 passed**；`compileall` EXIT=0；`--help` EXIT=0；REPL `/quit` EXIT=0
+- **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
+
+## 迭代 8 总结（发布追踪）
+
+- 交付：web_search 工具（DDG lite 零依赖 + 自定义 API 插拔）、goal 模式（自动续跑/受阻检测/状态持久化/恢复注入 + `/goal` 命令）、todo 任务清单（todo_write + 进度 UI）、delegate_subagent（隔离上下文子任务 + 嵌套轨迹）、上下文压缩（compaction + 截断保留摘要修复）
+- 测试规模：**123 passed**（mock LLM 免 key）+ 4 次真实任务冒烟；前端以 `node --check` + Node DOM 垫片（JSFLOW 系列）验证
+- 已知边界（如实记录）：subagent 预算 3 轮不可再委托；compaction 仅 Web 启用且失败回退旧截断；`/plan`、`/chat` 命令留待后续
+- 未提交变更由用户管理仓库

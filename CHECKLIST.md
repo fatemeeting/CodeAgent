@@ -262,6 +262,6 @@
 
 ## AM. 迭代 8 切片 8.5 集成回归
 
-- [ ] AM1 真实冒烟 ×3~4（goal 完成/受阻、todo+subagent 复合、web_search）
-- [ ] AM2 全量回归（pytest/CLI/REPL/会话/轨迹）
-- [ ] AM3 证据入 AGENT_LOG，迭代 8 放行
+- [x] AM1 真实冒烟 ×4：goal 完成（goal_end done + goal_demo.txt）、goal 受阻（goal_blocked + goal_end）、复合任务（todo×3 + web_search + delegate_subagent + sub_demo.txt）、web_search 直连，均以 [DONE] 收尾
+- [x] AM2 全量回归（pytest 123 全绿 / compileall / --help / REPL /quit）
+- [x] AM3 证据入 AGENT_LOG，迭代 8 放行
