@@ -1021,3 +1021,19 @@
   - `node --check` EXIT=0；无头 DOM 垫片 **12/12 PASS**（/plan URL、pending 确认栏、确认 plan_text URL、确认栏移除、确认消息落盘、修改表单、plan_feedback URL、修改意见落盘、取消不发请求、取消标注、重放恢复）
   - 真实冒烟 ×5：A `/events?plan=1`（真实 API）→ `plan{status:pending}`、**零工具轮执行**、[DONE]；B `/events?plan_text=<A 生成的计划>` → `plan{status:confirmed}`、按计划执行 3 轮、答复「已按计划全部执行」；C CLI `y` 确认执行；D CLI `n` 取消（EXIT=0）；E CLI 修改意见「two steps only」→ 重新生成 2 步计划 → 确认执行
 - **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
+
+## 迭代 10 切片 10.2/10.3：按钮尺寸圆角 + 资源管理器文件操作
+
+- **时间**：2026-08-30
+- **用户反馈**：① 工作区选择界面与创建 skill 界面的按钮尺寸不合适、不是圆角；② 资源管理器应支持对文件的操作（创建/重命名/删除 文件夹/文件）
+- **Agent 修改了什么**（`agent/web.py` + `tests/test_web.py`）：
+  - 10.2 按钮统一：`.btn`/`.btn-accent` 胶囊圆角 999px、padding 10px 18px、字号 15px、加粗、line-height 1；`.btn-accent:disabled` 改中性色 #b9c3da（原暖橙 #e3cfc4 过时）；`.mgr-cancel`（工作区取消/技能关闭）改同规格描边胶囊（8px 16px）——工作区选择（选择文件夹/确认进入/取消）与技能界面（新建/保存/取消/关闭）全部统一
+  - 10.3 后端：`POST /fs-new {workdir, path, type}`（file 自动建父目录写空文件、dir mkdir、存在报错）、`POST /fs-rename {workdir, path, new_name}`（同目录改名；新名禁空/`/ \`/`.` `..`；目标存在报错）、`DELETE /fs {workdir, path}`（文件 unlink；目录仅**空目录** rmdir，非空报「目录可能非空」）——全部 `resolve + is_relative_to` 越界防护
+  - 10.3 前端：资源管理器顶栏「＋ 文件 / ＋ 目录」→ 树顶内联命名输入（Enter 确认/Esc 取消，支持子路径）；树节点行 hover 显示 ✎ 重命名（行内输入，Enter 提交/Esc 还原）与 🗑 删除（两步确认：点击 →「确认删除？」→ 3 秒内再点执行）；操作后自动 `loadTree()` 刷新；**编辑器同步**：当前打开文件被重命名 → 自动加载新路径、被删除 → 清空编辑器并显示「文件已删除」占位
+  - **真 bug 修复**：`loadFile` 之前只存 basename（`currentFile.name`），`saveFile` 拿 basename 当路径 → 子目录文件保存错位；改为 `currentFile = {path(相对路径), name, content}`，保存/重命名/删除均按 path 定位
+  - 测试：`test_web.py` +1（fs 端点全链路：新建/重名/建目录/越界/重命名/非法新名 ×4/非空目录拒绝/空目录与文件删除/越界删除）
+- **检查证据**：
+  - `pytest -q` → **154 passed**（153 + 1）；`compileall` EXIT=0
+  - `node --check` EXIT=0；无头 DOM 垫片 **15/15 PASS**（顶栏按钮、树节点渲染、✎/🗑 操作按钮、新建输入行、/fs-new 载荷、刷新树、重命名内联输入、/fs-rename 载荷、两步删除、DELETE 请求、当前文件清空、tab 隐藏、删除占位、saveFile 相对路径、loadFile 记录 path）；CSS 标记冒烟 4/4（btn/btn-accent/mgr-cancel 胶囊 + 树操作按钮样式）
+  - 真实服务冒烟（127.0.0.1:8901）：新建文件（含子目录）✓ → 新建目录 ✓ → 重名拒绝 ✓ → 越界拒绝 ✓ → 重命名（磁盘验证）✓ → 非空目录删除拒绝 ✓ → 空目录删除 ✓ → 文件删除 ✓
+- **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）

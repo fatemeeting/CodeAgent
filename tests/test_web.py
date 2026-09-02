@@ -848,3 +848,55 @@ def test_web_skills_env_readonly(tmp_path, monkeypatch):
     finally:
         server.shutdown()
         server.server_close()
+
+
+# ---------- 迭代 10 · 10.3：资源管理器文件操作端点 ----------
+
+def test_web_fs_operations(tmp_path):
+    """POST /fs-new、POST /fs-rename、DELETE /fs：越界防护 + 空目录限定 + 存在性检查。"""
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    server = ThreadingHTTPServer(("127.0.0.1", 0), AgentHandler)
+    server.config = _config()
+    server.workdir = str(ws)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = server.server_address[1]
+    qs = urllib.parse.quote(str(ws))
+    try:
+        # 新建文件（自动建父目录）
+        created = _skill_req(port, "/fs-new", {"path": "src/main.py", "type": "file"})
+        assert created["ok"] is True
+        assert (ws / "src" / "main.py").is_file()
+        # 重复创建报错
+        dup = _skill_req(port, "/fs-new", {"path": "src/main.py", "type": "file"})
+        assert dup["ok"] is False and "已存在" in dup["error"]
+        # 新建目录
+        mkdir_ok = _skill_req(port, "/fs-new", {"path": "src/utils", "type": "dir"})
+        assert mkdir_ok["ok"] is True and (ws / "src" / "utils").is_dir()
+        # 越界拒绝
+        bad = _skill_req(port, "/fs-new", {"path": "../evil.txt", "type": "file"})
+        assert bad["ok"] is False and "越界" in bad["error"]
+        # 重命名
+        renamed = _skill_req(port, "/fs-rename", {"path": "src/main.py", "new_name": "app.py"})
+        assert renamed["ok"] is True
+        assert (ws / "src" / "app.py").is_file() and not (ws / "src" / "main.py").exists()
+        # 非法新名（穿越 / 分隔符 / 空）
+        for bad_name in ("../x.py", "a/b", "", ".."):
+            r = _skill_req(port, "/fs-rename", {"path": "src/app.py", "new_name": bad_name})
+            assert r["ok"] is False
+        # 删除：非空目录拒绝
+        (ws / "src" / "utils" / "a.txt").write_text("x", encoding="utf-8")
+        d1 = _skill_req(port, f"/fs?workdir={qs}&path=src/utils", method="DELETE")
+        assert d1["ok"] is False and "删除失败" in d1["error"]
+        # 清空后空目录可删；文件可删；越界拒绝
+        (ws / "src" / "utils" / "a.txt").unlink()
+        d2 = _skill_req(port, f"/fs?workdir={qs}&path=src/utils", method="DELETE")
+        assert d2["ok"] is True and not (ws / "src" / "utils").exists()
+        d3 = _skill_req(port, f"/fs?workdir={qs}&path=src/app.py", method="DELETE")
+        assert d3["ok"] is True and not (ws / "src" / "app.py").exists()
+        d4 = _skill_req(port, f"/fs?workdir={qs}&path=../evil", method="DELETE")
+        assert d4["ok"] is False and "越界" in d4["error"]
+    finally:
+        server.shutdown()
+        server.server_close()

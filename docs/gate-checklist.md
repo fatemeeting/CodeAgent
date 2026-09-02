@@ -1,21 +1,21 @@
-# gate-checklist.md — 迭代 10 · 切片 10.1 放行清单
+# gate-checklist.md — 迭代 10 · 切片 10.2/10.3 放行清单
 
-> 当前阶段：迭代 10 · 切片 10.1（/plan 两段式人工确认）。放行决定：通过 / 重试 / 降级 / 停止。
+> 当前阶段：迭代 10 · 切片 10.2（按钮尺寸圆角）+ 10.3（资源管理器文件操作）。放行决定：通过 / 重试 / 降级 / 停止。
 
 ## 必过项
 
-- [x] Web `/plan` 两段式：pending 计划暂停不执行；✓确认 / ✎修改 / ✕取消；重放可恢复
-- [x] 确认 → plan_text 注入执行；修改 → plan_feedback 重新生成；取消不执行；生成失败降级
-- [x] CLI `--plan` 交互确认（y/n/修改意见）；非交互取消
-- [x] `pytest -q` 全绿（153）、`compileall`、`node --check`、无头垫片、真实冒烟
+- [x] 10.2 工作区/技能界面按钮胶囊圆角统一尺寸；禁用态中性色；node --check + 页面标记冒烟
+- [x] 10.3 `POST /fs-new` / `POST /fs-rename` / `DELETE /fs`（越界防护、空目录限定、存在性检查）
+- [x] 10.3 前端：顶栏新建 + 节点重命名/两步删除 + 树刷新 + 当前文件同步；saveFile 路径 bug 修复
+- [x] `pytest -q` 全绿（154）、`compileall`、无头垫片、真实服务冒烟
 
 ## 证据位置
 
-- 检查证据：见 `docs/AGENT_LOG.md` 迭代 10 切片 10.1 条目
-- 代码：`agent/plan.py`、`agent/web.py`、`agent/cli.py`、`tests/test_plan.py`、`tests/test_web.py`
+- 检查证据：见 `docs/AGENT_LOG.md` 迭代 10 切片 10.2/10.3 条目
+- 代码：`agent/web.py`、`tests/test_web.py`
 
 ## 退出决定
 
-- 通过 → 切片 10.2（或迭代 10 其余需求）
+- 通过 → 迭代 10 其余需求
 - 重试 → 补齐缺失项后复查
 - 停止 → 记录原因

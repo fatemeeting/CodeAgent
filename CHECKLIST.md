@@ -319,6 +319,19 @@
 - [x] AW3 CLI `--plan` 交互确认（y 执行 / n 取消 / 修改意见重新生成）；非交互视为取消
 - [x] AW4 计划生成失败降级直接执行；回归（pytest/node --check/垫片/真实冒烟）
 
+## AX. 迭代 10 切片 10.2（按钮尺寸与圆角）
+
+- [x] AX1 工作区选择界面按钮：胶囊圆角 + 统一尺寸（主按钮 10×18px/15px，取消同规格描边）
+- [x] AX2 技能创建/管理界面按钮：同规格统一；禁用态中性色
+- [x] AX3 回归：node --check + 页面标记冒烟
+
+## AY. 迭代 10 切片 10.3（资源管理器文件操作）
+
+- [x] AY1 顶栏「＋ 文件/＋ 目录」内联命名输入 → `POST /fs-new`（file 自动建父目录；dir mkdir；存在报错）
+- [x] AY2 树节点 hover ✎ 重命名（内联输入，`POST /fs-rename` 仅同目录、禁分隔符）与 🗑 删除（两步确认，`DELETE /fs` 仅空目录）
+- [x] AY3 越界防护 + 操作后刷新树 + 当前文件删除/重命名同步编辑器；修复 saveFile basename 路径 bug
+- [x] AY4 回归：pytest、node --check、无头垫片、真实冒烟
+
 ## AR. 迭代 9 切片 9.4 内置技能
 
 - [x] AR1 内置 python-testing / code-review / web-frontend（SKILL.md + 资源）

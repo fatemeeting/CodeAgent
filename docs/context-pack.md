@@ -1,23 +1,23 @@
 # context-pack.md — 当前阶段上下文包
 
-> 当前阶段：**迭代 10 · 切片 10.1（/plan 两段式人工确认）**
+> 当前阶段：**迭代 10 · 切片 10.2/10.3（按钮尺寸圆角 + 资源管理器文件操作）**
 
 ## 当前阶段目标
 
-把 `/plan` 从「出计划后立即执行」改为**两段式**：先生成计划展示并暂停（`plan{status:pending}`，不执行工具循环），前端确认栏 ✓确认执行 / ✎修改计划 / ✕取消；确认后携带 `plan_text` 注入「已确认的执行计划」再执行（`plan{status:confirmed}`）；修改则带 `plan_feedback` 重新生成再次暂停；取消不执行。CLI `--plan` 同步改为交互确认（y/n/修改意见），非交互视为取消。计划生成失败降级直接执行。`/plan` 与 `/goal` 互斥、与 `/skill` 组合不变。
+10.2：工作区选择与技能创建/管理界面的按钮统一胶囊圆角（999px）与尺寸（主按钮 padding 10px 18px / 15px，取消类同规格描边，禁用态中性色）。10.3：资源管理器支持文件操作——顶栏「＋ 文件/＋ 目录」内联命名输入；树节点 hover ✎ 重命名 / 🗑 两步确认删除；后端 `POST /fs-new`、`POST /fs-rename`、`DELETE /fs`（均带 is_relative_to 越界防护；目录仅空可删）；操作后刷新树并同步编辑器状态；修复 `saveFile` 用 basename 当路径的 bug（`currentFile` 存相对路径）。
 
 ## 必须读
 
-- `SPEC.md` 第 31 节、`CHECKLIST.md` AW 节
-- `agent/plan.py`（make_plan）、`agent/web.py`（`_handle_events` worker plan 分支、`handleEvent` plan 块、`sendTask`/`newTurnState`/`renderTraceFromEvents`）、`agent/cli.py`（--plan）
-- `tests/test_plan.py`、`tests/test_web.py`（`test_web_sse_chat_mode_readonly_and_plan`）
+- `SPEC.md` 第 32 节、`CHECKLIST.md` AX/AY 节
+- `agent/web.py`：CSS（.btn/.btn-accent/.mgr-cancel/.tree-*）、`buildFileTree`/`renderTreeNode`/`loadTree`/`loadFile`/`saveFile`、`_handle_tree`/`_handle_file`/`_handle_save_file`、`do_POST`/`do_DELETE` 路由
+- `tests/test_web.py`（端点测试模式）
 
 ## 不得读 / 不得改
 
 - `.env`（真实凭据）
-- `agent/loop.py`/`agent/llm.py`（无需改）
+- `agent/loop.py`/`agent/llm.py`/`agent/skills.py`（无需改）
 
 ## 输出要求
 
-- 产出：`agent/plan.py`、`agent/web.py`、`agent/cli.py`、`tests/test_plan.py`、`tests/test_web.py`
-- 验收：`pytest -q` 全绿（约 152）；`node --check` + 无头垫片（确认/修改/取消/重放）；真实冒烟（plan=1 暂停 → plan_text 执行；CLI 交互确认）
+- 产出：`agent/web.py`、`tests/test_web.py`
+- 验收：`pytest -q` 全绿（约 158）；`node --check` + 无头垫片（新建/重命名/删除/编辑器同步）；真实服务冒烟（文件 CRUD + 越界防护）

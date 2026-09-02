@@ -55,10 +55,10 @@ INDEX_HTML = """<!DOCTYPE html>
   .mgr-card { background: var(--surface); border: 1px solid var(--border-l1); border-radius: 16px; padding: 40px 44px; width: 520px; max-width: 92vw; max-height: 92vh; overflow-y: auto; box-shadow: 0 2px 12px rgba(38,37,30,.06); display: flex; flex-direction: column; gap: 12px; }
   .mgr-title { font-size: 28px; font-weight: 700; text-align: center; letter-spacing: -.5px; }
   .mgr-sub { color: var(--muted); text-align: center; margin-bottom: 8px; }
-  .btn { border: 1px solid var(--border-l1); background: var(--surface); color: var(--text); border-radius: 8px; padding: 10px 14px; cursor: pointer; font-size: 15px; }
+  .btn { border: 1px solid var(--border-l1); background: var(--surface); color: var(--text); border-radius: 999px; padding: 10px 18px; cursor: pointer; font-size: 15px; font-weight: 600; line-height: 1; }
   .btn:hover { background: var(--code-bg); }
-  .btn-accent { background: var(--accent); color: #fff; border: none; font-weight: 600; }
-  .btn-accent:disabled { background: #e3cfc4; cursor: not-allowed; }
+  .btn-accent { background: var(--accent); color: #fff; border: none; font-weight: 600; border-radius: 999px; padding: 10px 18px; cursor: pointer; font-size: 15px; line-height: 1; }
+  .btn-accent:disabled { background: #b9c3da; cursor: not-allowed; }
   .btn-accent:not(:disabled):hover { background: var(--accent-hover); }
   .mgr-divider { height: 1px; background: var(--border); margin: 4px 0; }
   .mgr-path { padding: 10px 12px; border: 1px solid var(--border-l1); border-radius: 8px; font-size: 14px; font-family: Consolas, monospace; width: 100%; }
@@ -71,7 +71,8 @@ INDEX_HTML = """<!DOCTYPE html>
   .recent .path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
   .recent .del { color: var(--muted); font-weight: 700; padding: 0 4px; flex-shrink: 0; }
   .recent .del:hover { color: var(--err); }
-  .mgr-cancel { border: none; background: none; color: var(--muted); cursor: pointer; font-size: 14px; padding: 6px; }
+  .mgr-cancel { border: 1px solid var(--border-l1); background: var(--surface); color: var(--muted); cursor: pointer; font-size: 14px; font-weight: 600; padding: 8px 16px; border-radius: 999px; line-height: 1; }
+  .mgr-cancel:hover { color: var(--accent); background: var(--accent-soft); }
   /* 主布局骨架 */
   #main { display: none; flex: 1; min-height: 0; height: 100vh; height: 100dvh; flex-direction: column; overflow: hidden; }
   #topbar { display: flex; flex-shrink: 0; align-items: center; gap: 12px; padding: 8px 20px; background: var(--surface); border-bottom: 1px solid var(--border-l1); overflow: hidden; }
@@ -205,12 +206,24 @@ INDEX_HTML = """<!DOCTYPE html>
   .fv-ta { flex: 1; border: none; outline: none; background: transparent; resize: none; font-family: Consolas, monospace; font-size: 14px; line-height: 1.5; color: var(--text); padding: 0 0 0 12px; overflow: auto; overscroll-behavior: contain; }
   /* 文件树（Editor 左栏） */
   .tree-title { font-size: 13px; font-weight: 700; color: var(--muted); padding: 10px 16px 6px; letter-spacing: .3px; }
+  .tree-title-row { display: flex; align-items: center; gap: 6px; padding: 10px 16px 6px; }
+  .tree-title-row .tree-title { padding: 0; flex: 1; }
+  .tree-op { border: 1px solid var(--border-l1); background: var(--surface); color: var(--muted); border-radius: 999px; padding: 4px 10px; cursor: pointer; font-size: 12px; font-weight: 600; line-height: 1.4; }
+  .tree-op:hover { background: var(--accent-soft); color: var(--accent); }
   #tree-root { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 4px 8px 16px; }
   .tree-node { font-size: 14px; }
+  .tree-row { display: flex; align-items: center; gap: 4px; }
+  .tree-row .tree-label { flex: 1; }
   .tree-label { display: block; padding: 3px 6px; border-radius: 6px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .tree-label:hover { background: var(--accent-soft); }
   .tree-label.file { font-family: Consolas, monospace; }
   .tree-kids { padding-left: 14px; }
+  .tree-act { display: none; border: none; background: none; cursor: pointer; font-size: 12px; color: var(--muted); padding: 1px 5px; border-radius: 6px; line-height: 1.2; }
+  .tree-row:hover .tree-act { display: inline-block; }
+  .tree-act:hover { background: var(--accent-soft); color: var(--accent); }
+  .tree-act.del:hover { color: var(--err); }
+  .tree-inp { flex: 1; min-width: 0; border: 1px solid var(--accent); border-radius: 6px; padding: 3px 6px; font-size: 13px; font-family: inherit; background: var(--surface); color: var(--text); }
+  .tree-inp-row { display: flex; align-items: center; gap: 6px; padding: 6px 2px 2px; }
   /* 弹层 */
   #modal { display: none; position: fixed; inset: 0; background: rgba(38,37,30,.45); align-items: center; justify-content: center; z-index: 10; padding: 24px; }
   #modal .mgr-card { box-shadow: 0 8px 40px rgba(38,37,30,.2); }
@@ -1801,7 +1814,7 @@ async function loadFile(name) {
     const data = await resp.json();
     const tab = document.getElementById('file-tab');
     if (data.ok) {
-      currentFile = { name: data.name, content: data.content };
+      currentFile = { path: data.path, name: data.name, content: data.content };  // path 为相对路径（保存/重命名/删除按 path 定位）
       if (tab) { tab.textContent = data.name; tab.style.display = ''; }
       const saveBtn = document.getElementById('file-save');
       if (saveBtn) saveBtn.style.display = '';
@@ -1842,7 +1855,7 @@ async function saveFile() {
     const resp = await fetch('/save-file', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({workdir: state.workspace, path: currentFile.name, content: content}),
+      body: JSON.stringify({workdir: state.workspace, path: currentFile.path, content: content}),
     });
     const data = await resp.json();
     if (data.ok) { currentFile.content = content; done(true); }
@@ -1886,10 +1899,14 @@ function renderFile(content) {
   view.appendChild(ta);
 }
 
-/* ---------- 文件树（Editor 左栏） ---------- */
+/* ---------- 文件树（Editor 左栏，迭代 10 · 10.3：新建/重命名/删除） ---------- */
 function buildFileTree() {
   document.getElementById('pane-left').innerHTML = `
-    <div class="tree-title">资源管理器</div>
+    <div class="tree-title-row">
+      <div class="tree-title">资源管理器</div>
+      <button class="tree-op" onclick="fsNewPrompt('file')" title="新建文件">＋ 文件</button>
+      <button class="tree-op" onclick="fsNewPrompt('dir')" title="新建目录">＋ 目录</button>
+    </div>
     <div id="tree-root"></div>`;
   loadTree();
 }
@@ -1912,10 +1929,25 @@ async function loadTree() {
 function renderTreeNode(n) {
   const div = document.createElement('div');
   div.className = 'tree-node';
+  const row = document.createElement('div');
+  row.className = 'tree-row';
   const label = document.createElement('span');
   label.className = 'tree-label ' + (n.type === 'dir' ? 'dir' : 'file');
   label.textContent = (n.type === 'dir' ? '📁 ' : '📄 ') + n.name;
-  div.appendChild(label);
+  row.appendChild(label);
+  const ren = document.createElement('button');
+  ren.className = 'tree-act';
+  ren.textContent = '✎';
+  ren.title = '重命名 ' + n.name;
+  ren.onclick = function () { fsRenamePrompt(row, n); };
+  const del = document.createElement('button');
+  del.className = 'tree-act del';
+  del.textContent = '🗑';
+  del.title = '删除 ' + n.name;
+  del.onclick = function () { askFsDelete(n, del); };
+  row.appendChild(ren);
+  row.appendChild(del);
+  div.appendChild(row);
   if (n.type === 'file') {
     label.onclick = () => loadFile(n.path);
   } else {
@@ -1929,6 +1961,121 @@ function renderTreeNode(n) {
     div.appendChild(kids);
   }
   return div;
+}
+
+/* 新建文件/目录：树顶内联命名输入 */
+function fsNewPrompt(type) {
+  const root = document.getElementById('tree-root');
+  if (!root) return;
+  const row = document.createElement('div');
+  row.className = 'tree-inp-row';
+  const inp = document.createElement('input');
+  inp.className = 'tree-inp';
+  inp.placeholder = type === 'dir' ? '新目录名，可含子路径（如 src/utils）' : '新文件名，可含子路径（如 src/main.py）';
+  const ok = document.createElement('button');
+  ok.className = 'tree-op';
+  ok.textContent = '确认';
+  const cancel = document.createElement('button');
+  cancel.className = 'tree-op';
+  cancel.textContent = '取消';
+  const submit = async function () {
+    const name = inp.value.trim();
+    if (!name) { inp.focus(); return; }
+    try {
+      const resp = await fetch('/fs-new', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({workdir: state.workspace, path: name, type: type}),
+      });
+      const data = await resp.json();
+      if (data.ok && type === 'file') loadFile(data.path);
+      else if (!data.ok) {
+        row.insertAdjacentHTML('afterbegin', '<div class="mgr-status err">✗ ' + (data.error || '创建失败') + '</div>');
+        return;
+      }
+    } catch (e) { /* 刷新兜底 */ }
+    row.remove();
+    loadTree();
+  };
+  ok.onclick = submit;
+  inp.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); submit(); }
+    else if (e.key === 'Escape') { row.remove(); }
+  });
+  cancel.onclick = function () { row.remove(); };
+  row.appendChild(inp);
+  row.appendChild(ok);
+  row.appendChild(cancel);
+  root.insertBefore(row, root.firstChild);
+  inp.focus();
+}
+
+/* 重命名：节点行内联输入，Enter 提交 / Esc 还原 */
+function fsRenamePrompt(row, n) {
+  const inp = document.createElement('input');
+  inp.className = 'tree-inp';
+  inp.value = n.name;
+  const submit = async function () {
+    const newName = inp.value.trim();
+    if (!newName || newName === n.name) { loadTree(); return; }
+    try {
+      const resp = await fetch('/fs-rename', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({workdir: state.workspace, path: n.path, new_name: newName}),
+      });
+      const data = await resp.json();
+      if (data.ok && currentFile && currentFile.path === n.path) loadFile(data.path);  // 当前打开文件被重命名 → 重新加载
+    } catch (e) { /* 刷新兜底 */ }
+    loadTree();
+  };
+  inp.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); submit(); }
+    else if (e.key === 'Escape') { loadTree(); }
+  });
+  row.innerHTML = '';
+  row.appendChild(inp);
+  inp.focus();
+  try { inp.select(); } catch (e) { /* 忽略 */ }
+}
+
+/* 删除：两步确认（点击 → 确认删除？→ 3 秒内再点执行） */
+let fsDelTimer = null;
+function askFsDelete(n, btn) {
+  if (btn.dataset.armed === '1') {
+    btn.dataset.armed = '';
+    btn.textContent = '🗑';
+    clearTimeout(fsDelTimer);
+    doFsDelete(n);
+    return;
+  }
+  btn.dataset.armed = '1';
+  btn.textContent = '确认删除？';
+  clearTimeout(fsDelTimer);
+  fsDelTimer = setTimeout(function () {
+    btn.dataset.armed = '';
+    btn.textContent = '🗑';
+  }, 3000);
+}
+
+async function doFsDelete(n) {
+  try {
+    const resp = await fetch('/fs?workdir=' + encodeURIComponent(state.workspace) + '&path=' + encodeURIComponent(n.path), {method: 'DELETE'});
+    const data = await resp.json();
+    if (data.ok && currentFile && currentFile.path === n.path) {
+      currentFile = null;  // 当前打开文件被删除 → 清空编辑器
+      const tab = document.getElementById('file-tab');
+      if (tab) tab.style.display = 'none';
+      const saveBtn = document.getElementById('file-save');
+      if (saveBtn) saveBtn.style.display = 'none';
+      const view = document.getElementById('editor-host');
+      if (view) view.innerHTML = '<div class="placeholder">文件已删除</div>';
+    } else if (!data.ok) {
+      const root = document.getElementById('tree-root');
+      if (root) root.insertAdjacentHTML('afterbegin', '<div class="mgr-status err">✗ ' + (data.error || '删除失败') + '</div>');
+    }
+  } catch (e) { /* 刷新兜底 */ }
+  loadTree();
 }
 
 (async function boot() {
@@ -2151,6 +2298,82 @@ class AgentHandler(BaseHTTPRequestHandler):
             result = {"ok": False, "error": str(exc)}
         self._write_json(result)
 
+    # ---------- 文件系统操作（迭代 10 · 10.3：新建/重命名/删除，越界防护） ----------
+    @staticmethod
+    def _fs_root(workdir: str, rel: str) -> tuple[Path, Path]:
+        root = Path(workdir).resolve()
+        if not root.is_dir():
+            raise ValueError(f"工作区不存在：{workdir}")
+        target = (root / rel).resolve()
+        if not target.is_relative_to(root):
+            raise ValueError(f"路径越界：{rel}")
+        return root, target
+
+    def _handle_fs_new(self) -> None:
+        """POST /fs-new {workdir, path, type: file|dir}：新建文件/目录（file 自动建父目录）。"""
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            body = json.loads(self.rfile.read(length) or b"{}")
+            workdir = str(body.get("workdir") or self.server.workdir)
+            rel = str(body.get("path") or "")
+            kind = str(body.get("type") or "file")
+            if not rel:
+                raise ValueError("缺少 path")
+            _, target = self._fs_root(workdir, rel)
+            if target.exists():
+                raise ValueError(f"已存在：{rel}")
+            if kind == "dir":
+                target.mkdir(parents=True)
+            else:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text("", encoding="utf-8")
+            result = {"ok": True, "path": rel, "name": target.name, "type": kind}
+        except Exception as exc:  # noqa: BLE001
+            result = {"ok": False, "error": str(exc)}
+        self._write_json(result)
+
+    def _handle_fs_rename(self) -> None:
+        """POST /fs-rename {workdir, path, new_name}：同目录改名（禁分隔符与 . ..）。"""
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            body = json.loads(self.rfile.read(length) or b"{}")
+            workdir = str(body.get("workdir") or self.server.workdir)
+            rel = str(body.get("path") or "")
+            new_name = str(body.get("new_name") or "").strip()
+            if not rel:
+                raise ValueError("缺少 path")
+            if not new_name or new_name in (".", "..") or "/" in new_name or "\\" in new_name:
+                raise ValueError("新名称非法：不能为空、不能含路径分隔符或 . ..")
+            root, target = self._fs_root(workdir, rel)
+            if not target.exists():
+                raise ValueError(f"不存在：{rel}")
+            new_path = target.parent / new_name
+            if new_path.exists():
+                raise ValueError(f"已存在：{new_name}")
+            target.rename(new_path)
+            result = {"ok": True, "path": str(new_path.relative_to(root)), "name": new_name}
+        except Exception as exc:  # noqa: BLE001
+            result = {"ok": False, "error": str(exc)}
+        self._write_json(result)
+
+    def _fs_delete(self, workdir: str, rel: str) -> dict:
+        """DELETE /fs：文件直接删；目录仅空目录可删（rmdir）。"""
+        try:
+            if not rel:
+                raise ValueError("缺少 path")
+            _, target = self._fs_root(workdir, rel)
+            if not target.exists():
+                raise ValueError(f"不存在：{rel}")
+            if target.is_dir():
+                target.rmdir()  # 非空目录抛 OSError
+            else:
+                target.unlink()
+            return {"ok": True}
+        except OSError as exc:
+            return {"ok": False, "error": f"删除失败（目录可能非空）：{exc}"}
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "error": str(exc)}
+
     def _handle_events(self) -> None:
         """SSE 流式：后台线程运行 agent，逐条推送输出，[DONE] 结束。"""
         parsed = urllib.parse.urlparse(self.path)
@@ -2353,6 +2576,10 @@ class AgentHandler(BaseHTTPRequestHandler):
             self.wfile.write(data)
         elif self.path.startswith("/save-file"):
             self._handle_save_file()
+        elif self.path.startswith("/fs-new"):
+            self._handle_fs_new()
+        elif self.path.startswith("/fs-rename"):
+            self._handle_fs_rename()
         elif self.path.startswith("/sessions"):
             self._handle_sessions_post()
         elif self.path.startswith("/skills"):
@@ -2367,7 +2594,7 @@ class AgentHandler(BaseHTTPRequestHandler):
         else:
             self.send_error(404)
 
-    def do_DELETE(self):  # noqa: N802 - 会话删除 + 技能删除
+    def do_DELETE(self):  # noqa: N802 - 会话删除 + 技能删除 + 文件系统删除
         parts = [p for p in urllib.parse.urlparse(self.path).path.split("/") if p]
         if len(parts) == 2 and parts[0] == "sessions":
             ok = self._sessions().delete_session(parts[1])
@@ -2381,6 +2608,11 @@ class AgentHandler(BaseHTTPRequestHandler):
                 if ok
                 else {"ok": False, "error": f"技能不存在或为只读（仅工作区级可删除）：{parts[1]}"}
             )
+        elif len(parts) == 1 and parts[0] == "fs":
+            query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            workdir = (query.get("workdir") or [None])[0] or self.server.workdir
+            rel = (query.get("path") or [""])[0]
+            result = self._fs_delete(workdir, rel)
         else:
             self.send_error(404)
             return
