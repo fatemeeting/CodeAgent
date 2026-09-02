@@ -100,6 +100,14 @@ INDEX_HTML = """<!DOCTYPE html>
   .skill-form input, .skill-form textarea { width: 100%; border: 1px solid var(--border-l1); border-radius: 8px; padding: 8px 10px; font-size: 13px; margin-bottom: 8px; font-family: inherit; background: var(--bg); color: var(--text); box-sizing: border-box; }
   .skill-form textarea { min-height: 130px; resize: vertical; font-family: Consolas, monospace; }
   .skill-form .skill-err { color: var(--err); font-size: 13px; min-height: 18px; }
+  /* /plan 两段式确认栏（迭代 10） */
+  .plan-bar { display: flex; gap: 8px; align-items: center; padding: 8px 2px; flex-wrap: wrap; }
+  .plan-bar button { border: 1px solid var(--border-l1); background: var(--bg); color: var(--text); border-radius: 8px; padding: 6px 12px; cursor: pointer; font-size: 13px; }
+  .plan-bar button:hover { background: var(--accent-soft); color: var(--accent); }
+  .plan-bar button.ok { background: var(--accent); color: #fff; border: none; font-weight: 600; }
+  .plan-bar button.ok:hover { background: var(--accent-hover); color: #fff; }
+  .plan-bar textarea.plan-fb { flex: 1; min-width: 220px; border: 1px solid var(--border-l1); border-radius: 8px; padding: 6px 10px; font-size: 13px; font-family: inherit; resize: vertical; background: var(--bg); color: var(--text); }
+  .plan-bar .plan-note { color: var(--muted); font-size: 13px; }
   #content { flex: 1; min-height: 0; height: 0; display: flex; overflow: hidden; }
   .pane { display: flex; flex-direction: column; overflow: hidden; min-height: 0; min-width: 0; }
   #pane-left { width: 240px; }
@@ -940,6 +948,7 @@ function newTurnState(bubble, traceEl) {
     steps: 0, toolMs: 0, statsEl: null,
     statusEl: null, connErr: false, done: false,
     todoBlk: null, pendingSubs: [],
+    planPending: false, planTask: '', planSkill: '', planBar: null,  // /plan 两段式（迭代 10）
   };
 }
 
@@ -1120,12 +1129,18 @@ function handleEvent(ev, t) {
       break;
     }
     case 'plan': {
+      const pending = ev.status === 'pending';
       const pb = createTblk(t.traceEl, 'note');
       pb.icon = pb.head.children[0];
       pb.icon.textContent = '📐';
-      pb.title.textContent = '执行计划';
+      pb.title.textContent = pending ? '执行计划（待确认）' : '执行计划（已确认）';
       pb.summary.textContent = oneLine(ev.plan || '', 60);
       pb.body.textContent = ev.plan || '';
+      if (pending) {
+        t.planPending = true;
+        t.planTask = ev.task || '';
+        t.planSkill = ev.skill || '';
+      }
       break;
     }
     case 'skill_loaded': {
@@ -1184,6 +1199,8 @@ function renderTraceFromEvents(traceEl, events) {
     sb.root.className = 'tblk sub err';
     sb.meta.textContent = '（未完成）';
   });
+  // /plan 两段式：重放时最后一个 plan 事件为 pending → 恢复确认栏
+  if (t.planPending) showPlanConfirm(t);
 }
 
 /* 中断轮次标记（对齐 DSH interrupted closer）：末轮 trace 无 turn_end 时补标记 */
@@ -1307,7 +1324,7 @@ function parseCommand(text) {
     let i = t.indexOf(word);
     while (i !== -1) {
       const nxt = t[i + word.length];
-      if ((i === 0 || /\s/.test(t[i - 1])) && (nxt === undefined || /\s/.test(nxt))) return i;
+      if ((i === 0 || /\\s/.test(t[i - 1])) && (nxt === undefined || /\\s/.test(nxt))) return i;
       i = t.indexOf(word, i + 1);
     }
     return -1;
@@ -1322,7 +1339,7 @@ function parseCommand(text) {
   }
   // /skill 指令：可多个、位置任意、与模式独立；后随空格分隔的技能名 token（逗号分隔）
   const names = [];
-  const taskAfterSkills = t.replace(/(^|\s)\/skill(?=\s|$)(\s+([^\s/][^\s]*))?/g, function (all, pre, ws, nameTok) {
+  const taskAfterSkills = t.replace(/(^|\\s)\\/skill(?=\\s|$)(\\s+([^\\s/][^\\s]*))?/g, function (all, pre, ws, nameTok) {
     (nameTok || '').split(',').forEach(function (n) {
       n = n.trim();
       if (n && names.indexOf(n) === -1) names.push(n);
@@ -1331,10 +1348,10 @@ function parseCommand(text) {
   });
   // 模式指令从任务文本中剥离
   const task = taskAfterSkills
-    .replace(/(^|\s)\/goal(?=\s|$)/g, ' ')
-    .replace(/(^|\s)\/plan(?=\s|$)/g, ' ')
-    .replace(/(^|\s)\/chat(?=\s|$)/g, ' ')
-    .replace(/\s+/g, ' ')
+    .replace(/(^|\\s)\\/goal(?=\\s|$)/g, ' ')
+    .replace(/(^|\\s)\\/plan(?=\\s|$)/g, ' ')
+    .replace(/(^|\\s)\\/chat(?=\\s|$)/g, ' ')
+    .replace(/\\s+/g, ' ')
     .trim();
   return {goalMode: goalMode, planMode: planMode, chatFlag: chatPos !== -1, names: names, task: task};
 }
@@ -1524,6 +1541,54 @@ function buildCmdPop() {
   });
 }
 
+/* 发起一轮请求：task 为发给服务端的任务文本；displayRaw 为对话中展示/落盘的用户消息。 */
+async function startTurn(task, urlSuffix, displayRaw) {
+  const raw = displayRaw === undefined ? task : displayRaw;
+  if (!chatMessages.some(m => m.role === 'user')) firstTask = task;
+  chatMessages.push({role: 'user', raw: raw});
+  appendMsg('user', raw);
+  chatMessages.push({role: 'agent', raw: ''});
+  const agent = appendAgentMsg();
+  const idx = chatMessages.length - 1;
+  await ensureSession(task);
+  saveMessages();
+  const es = new EventSource('/events?task=' + encodeURIComponent(task) + '&workdir=' + encodeURIComponent(state.workspace) + '&session=' + encodeURIComponent(currentSessionId || '') + urlSuffix);
+  const t = newTurnState(agent.bubble, agent.traceEl);
+  t.statusEl = agent.status;
+  es.onmessage = function (e) {
+    if (e.data === '[DONE]') {
+      t.done = true;  // 正常结束标记：其后的 EOF onerror 不再误报断线
+      es.close();
+      chatMessages[idx].raw = t.answerRaw;
+      chatMessages[idx].trace = t.traceEvents;
+      setStatus(t, '完成', 'done');
+      refreshFiles();
+      saveMessages();
+      if (firstTask) { autoRenameSession(firstTask); firstTask = null; }
+      if (t.planPending) showPlanConfirm(t);  // /plan 两段式：展示确认栏
+      return;
+    }
+    let ev;
+    try { ev = JSON.parse(e.data); } catch (err) { return; }
+    handleEvent(ev, t);
+    const h = document.getElementById('chat-history');
+    h.scrollTop = h.scrollHeight;
+  };
+  es.onerror = function () {
+    es.close();  // 防 EventSource 自动重连导致服务端重复运行任务
+    if (t.done || t.connErr) return;  // 正常完成后的 EOF 或已提示过 → 忽略
+    t.connErr = true;
+    const eb = createTblk(t.traceEl, 'err');
+    eb.icon = eb.head.children[0];
+    eb.icon.textContent = '⚠️';
+    eb.title.textContent = '连接中断';
+    eb.summary.textContent = '流已停止，请重新发送任务';
+    eb.body.textContent = 'SSE 连接中断，服务端任务已停止；请重新发送任务继续。';
+    setStatus(t, '出错', 'err');
+  };
+  return t;
+}
+
 async function sendTask() {
   const input = document.getElementById('chat-input');
   const parsed = parseCommand(input.value);
@@ -1549,47 +1614,92 @@ async function sendTask() {
     return;
   }
   input.value = '';
-  if (!chatMessages.some(m => m.role === 'user')) firstTask = task;
-  chatMessages.push({role: 'user', raw: task});
-  appendMsg('user', task);
-  chatMessages.push({role: 'agent', raw: ''});
-  const agent = appendAgentMsg();
-  const idx = chatMessages.length - 1;
-  await ensureSession(task);
-  saveMessages();
-  const es = new EventSource('/events?task=' + encodeURIComponent(task) + '&workdir=' + encodeURIComponent(state.workspace) + '&session=' + encodeURIComponent(currentSessionId || '') + '&mode=' + encodeURIComponent(mode) + (goalMode ? '&goal=1' : '') + (planMode ? '&plan=1' : '') + (skillParam ? '&skill=' + encodeURIComponent(skillParam) : ''));
-  const t = newTurnState(agent.bubble, agent.traceEl);
-  t.statusEl = agent.status;
-  es.onmessage = function (e) {
-    if (e.data === '[DONE]') {
-      t.done = true;  // 正常结束标记：其后的 EOF onerror 不再误报断线
-      es.close();
-      chatMessages[idx].raw = t.answerRaw;
-      chatMessages[idx].trace = t.traceEvents;
-      setStatus(t, '完成', 'done');
-      refreshFiles();
-      saveMessages();
-      if (firstTask) { autoRenameSession(firstTask); firstTask = null; }
-      return;
-    }
-    let ev;
-    try { ev = JSON.parse(e.data); } catch (err) { return; }
-    handleEvent(ev, t);
-    const h = document.getElementById('chat-history');
-    h.scrollTop = h.scrollHeight;
-  };
-  es.onerror = function () {
-    es.close();  // 防 EventSource 自动重连导致服务端重复运行任务
-    if (t.done || t.connErr) return;  // 正常完成后的 EOF 或已提示过 → 忽略
-    t.connErr = true;
-    const eb = createTblk(t.traceEl, 'err');
-    eb.icon = eb.head.children[0];
-    eb.icon.textContent = '⚠️';
-    eb.title.textContent = '连接中断';
-    eb.summary.textContent = '流已停止，请重新发送任务';
-    eb.body.textContent = 'SSE 连接中断，服务端任务已停止；请重新发送任务继续。';
-    setStatus(t, '出错', 'err');
-  };
+  const suffix = '&mode=' + encodeURIComponent(mode)
+    + (goalMode ? '&goal=1' : '')
+    + (planMode ? '&plan=1' : '')
+    + (skillParam ? '&skill=' + encodeURIComponent(skillParam) : '');
+  await startTurn(task, suffix);
+}
+
+/* ---------- /plan 两段式确认（迭代 10） ---------- */
+function mkPlanBtn(text, cls, onclick) {
+  const b = document.createElement('button');
+  b.textContent = text;
+  if (cls) b.className = cls;
+  b.onclick = onclick;
+  return b;
+}
+
+function lastPendingPlan(t) {
+  for (let i = t.traceEvents.length - 1; i >= 0; i--) {
+    const e = t.traceEvents[i];
+    if (e.type === 'plan') return e;
+  }
+  return null;
+}
+
+function showPlanConfirm(t) {
+  if (!t.planPending || t.planBar || !t.traceEl) return;
+  const bar = document.createElement('div');
+  bar.className = 'plan-bar';
+  bar.appendChild(mkPlanBtn('✓ 确认执行', 'ok', function () { confirmPlan(t); }));
+  bar.appendChild(mkPlanBtn('✎ 修改计划', '', function () { modifyPlan(t); }));
+  bar.appendChild(mkPlanBtn('✕ 取消', '', function () { cancelPlan(t); }));
+  t.planBar = bar;
+  t.traceEl.appendChild(bar);
+}
+
+function confirmPlan(t) {
+  const planEv = lastPendingPlan(t);
+  const plan = planEv ? (planEv.plan || '') : '';
+  t.planPending = false;
+  if (t.planBar) { t.planBar.remove(); t.planBar = null; }
+  const task = t.planTask || '';
+  const suffix = '&mode=agent&plan_text=' + encodeURIComponent(plan)
+    + (t.planSkill ? '&skill=' + encodeURIComponent(t.planSkill) : '');
+  startTurn(task + '（按已确认计划执行）', suffix);
+}
+
+function modifyPlan(t) {
+  if (!t.planBar) return;
+  const bar = t.planBar;
+  bar.innerHTML = '';
+  const ta = document.createElement('textarea');
+  ta.className = 'plan-fb';
+  ta.placeholder = '输入修改意见，例如：先写测试再实现、把步骤 3 拆细';
+  const ok = mkPlanBtn('提交修改', 'ok', function () {
+    const fb = ta.value.trim();
+    if (!fb) return;
+    t.planPending = false;
+    bar.remove();
+    t.planBar = null;
+    const task = t.planTask || '';
+    const suffix = '&mode=agent&plan=1&plan_feedback=' + encodeURIComponent(fb)
+      + (t.planSkill ? '&skill=' + encodeURIComponent(t.planSkill) : '');
+    startTurn(task, suffix, '修改计划：' + fb);
+  });
+  const back = mkPlanBtn('返回', '', function () {
+    bar.innerHTML = '';
+    t.planBar = null;
+    showPlanConfirm(t);
+  });
+  bar.appendChild(ta);
+  bar.appendChild(ok);
+  bar.appendChild(back);
+  ta.focus();
+}
+
+function cancelPlan(t) {
+  t.planPending = false;
+  if (t.planBar) {
+    const bar = t.planBar;
+    bar.innerHTML = '';
+    const note = document.createElement('span');
+    note.className = 'plan-note';
+    note.textContent = '✕ 计划已取消，未执行';
+    bar.appendChild(note);
+    t.planBar = null;
+  }
 }
 
 /* ---------- 中央编辑器（Monaco，CDN；离线回退行号视图） ---------- */
@@ -2056,6 +2166,8 @@ class AgentHandler(BaseHTTPRequestHandler):
         session_id = (query.get("session") or [None])[0]
         goal_mode = (query.get("goal") or ["0"])[0] in ("1", "true")
         plan_mode = (query.get("plan") or ["0"])[0] in ("1", "true")
+        plan_text = (query.get("plan_text") or [None])[0]  # 已确认的计划（两段式第二阶段）
+        plan_feedback = (query.get("plan_feedback") or [None])[0]  # 用户修改意见（重新生成）
         chat_mode = (query.get("mode") or ["agent"])[0] == "chat"
         skill_names = [
             s.strip() for s in (query.get("skill") or [""])[0].split(",") if s.strip()
@@ -2107,23 +2219,43 @@ class AgentHandler(BaseHTTPRequestHandler):
                                     loaded_skills.append(s)
                         except Exception:  # noqa: BLE001 - 技能加载失败按无技能继续
                             loaded_skills = []
-                    if plan_mode:
+                    run_after = True  # 两段式 /plan：pending 阶段只出计划，不执行
+                    if plan_text:
+                        # 第二阶段：用户已确认计划 → 注入并执行
+                        q.put({"type": "plan", "status": "confirmed", "plan": plan_text, "text": ""})
+                        task_run = f"{task_run}\n\n已确认的执行计划：\n{plan_text}\n请严格按计划逐步执行。"
+                    elif plan_mode:
                         try:
-                            plan = make_plan(client, task_run)
+                            plan = make_plan(client, task_run, feedback=plan_feedback)
                             if plan:
-                                q.put({"type": "plan", "plan": plan, "text": ""})
-                                task_run = f"{task_run}\n\n已制定的执行计划：\n{plan}\n请按计划逐步执行。"
-                        except Exception:  # noqa: BLE001 - 计划失败按无计划继续
-                            pass
-                    result = run(
-                        stream_cfg, task_run, workdir=workdir,
-                        client=client, emit=q.put, history=history,
-                        tools=run_tools, mode=run_mode,
-                        skills=loaded_skills or None,
+                                q.put({
+                                    "type": "plan",
+                                    "status": "pending",
+                                    "plan": plan,
+                                    "task": task_run,
+                                    "skill": ",".join(skill_names) if skill_names else "",
+                                    "text": "",
+                                })
+                                q.put({"type": "content_delta", "text": "已生成执行计划，请确认、修改或取消。"})
+                                run_after = False  # 等待用户确认/修改/取消，本轮不执行
+                        except Exception:  # noqa: BLE001 - 计划生成失败降级直接执行
+                            q.put({
+                                "type": "error",
+                                "severity": "warn",
+                                "message": "计划生成失败，将直接执行任务",
+                                "text": "",
+                            })
+                    result = (
+                        run(stream_cfg, task_run, workdir=workdir,
+                            client=client, emit=q.put, history=history,
+                            tools=run_tools, mode=run_mode,
+                            skills=loaded_skills or None)
+                        if run_after
+                        else "（等待确认计划）"
                     )
                     # goal 状态持久化（仅在 goal 模式或恢复 open 会话时写入，避免普通对话覆盖）
                     goal_open = (session or {}).get("goal", {}).get("status") == "open"
-                    if session_id and session is not None and (goal_mode or goal_open):
+                    if run_after and session_id and session is not None and (goal_mode or goal_open):
                         try:
                             r = (result or "").strip()
                             status = "open"

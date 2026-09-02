@@ -1004,3 +1004,20 @@
   - `node --check` EXIT=0；无头 DOM 垫片 **22/22 PASS**（句中 `/`、`/go` 过滤、词级替换 ×4、已有命令后再 `/`、句中 `/skill`、任务文本收起、URL 斜杠、开头 `/`、`/s` 过滤、CMD_ITEMS、组合解析/互斥/`/skills` 不误判、URL goal+skill/chat+skill、技能栏追加）
   - 真实服务冒烟（127.0.0.1:8898）：页面含 `cmd-pop` 元素、`currentWord` 词级逻辑、`renderSkillItems` 技能浮层逻辑
 - **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）
+
+## 迭代 10 切片 10.1：/plan 两段式人工确认
+
+- **时间**：2026-08-30
+- **给 Agent 的任务**：改变 /plan 模式——模型先告知用户具体计划、询问是否修改，**等待用户确认后**才继续执行（Web + CLI 同步）
+- **Agent 修改了什么**：
+  - `agent/plan.py`：`make_plan(client, task, feedback=None)`——修改意见写入规划提示词（「用户对上一版计划的修改意见（必须采纳…）」）
+  - `agent/web.py` 后端：`/events` 增 `plan_text`（已确认计划）与 `plan_feedback`（修改意见）参数；worker 改两段式——`plan=1` 只发 `plan{status:pending, plan, task, skill}` + 「已生成执行计划，请确认、修改或取消。」后**结束本回合不执行**；`plan_text` 发 `plan{status:confirmed}` 并注入「已确认的执行计划：…请严格按计划逐步执行。」后正常执行；`plan_feedback` 带意见重新生成再次 pending；生成失败发 `error{severity: warn}` 并**降级直接执行**（不卡用户）；goal 状态持久化仅在执行回合写入（`run_after` 守卫）
+  - `agent/web.py` 前端：`plan` 事件块区分「（待确认）/（已确认）」；`newTurnState` 增 planPending/planTask/planSkill/planBar；`startTurn(task, urlSuffix, displayRaw)` 抽取统一请求入口（sendTask/确认/修改复用）；[DONE] 后 pending 则渲染确认栏（✓ 确认执行 / ✎ 修改计划（内联意见输入框）/ ✕ 取消）；确认 → `plan_text` 请求 + 用户消息「（按已确认计划执行）」；修改 → `plan_feedback` 请求 + 用户消息「修改计划：意见」；取消 → 标注「✕ 计划已取消，未执行」不发起请求；**重放恢复**：renderTraceFromEvents 末尾检测最后 plan 事件为 pending → 重现确认栏（任务/技能随事件持久化）
+  - `agent/cli.py`：`--plan` 改交互循环——打印计划后询问「是否按此计划执行？(y=执行 / n=取消 / 直接输入修改意见重新生成)」；y → 注入「已确认的执行计划」执行；n → 退出；意见 → `make_plan(feedback=)` 重新生成再询问；非交互（EOF/管道无输入）视为取消
+  - **真 bug 修复**：CLI 修改意见经管道输入时 `surrogateescape` 产生孤立代理字符 → OpenAI 序列化崩溃（'utf-8' codec can't encode surrogate）→ 确认循环读入后 `encode('utf-8', errors='replace').decode('utf-8')` 净化
+  - 测试：`test_plan.py` +4（feedback 提示词、CLI 确认 y、取消 n、EOF 取消）、`test_web.py` +3/改 1（pending 暂停不执行、plan_text 确认执行、plan_feedback 重新生成、生成失败降级）
+- **检查证据**：
+  - `pytest -q` → **153 passed**（146 + 7）；`compileall` EXIT=0
+  - `node --check` EXIT=0；无头 DOM 垫片 **12/12 PASS**（/plan URL、pending 确认栏、确认 plan_text URL、确认栏移除、确认消息落盘、修改表单、plan_feedback URL、修改意见落盘、取消不发请求、取消标注、重放恢复）
+  - 真实冒烟 ×5：A `/events?plan=1`（真实 API）→ `plan{status:pending}`、**零工具轮执行**、[DONE]；B `/events?plan_text=<A 生成的计划>` → `plan{status:confirmed}`、按计划执行 3 轮、答复「已按计划全部执行」；C CLI `y` 确认执行；D CLI `n` 取消（EXIT=0）；E CLI 修改意见「two steps only」→ 重新生成 2 步计划 → 确认执行
+- **人工放行决定**：待人工确认（代码未提交，仓库由用户管理）

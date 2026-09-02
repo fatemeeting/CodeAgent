@@ -87,10 +87,25 @@ def main(argv: list[str] | None = None) -> int:
     task = args.task
     if args.plan:
         plan = make_plan(client, task)
-        print("计划：")
-        print(plan)
-        print()
-        task = f"{task}\n\n已制定的执行计划：\n{plan}\n请按计划逐步执行。"
+        while True:
+            print("计划：")
+            print(plan)
+            print()
+            try:
+                answer = input(
+                    "是否按此计划执行？(y=执行 / n=取消 / 直接输入修改意见重新生成) "
+                )
+            except (EOFError, KeyboardInterrupt):
+                print("\n未确认计划，已取消执行。")
+                return 0
+            a = answer.encode("utf-8", errors="replace").decode("utf-8").strip()  # 净化孤立代理字符（管道编码错配）
+            if a.lower() in ("y", "yes", "是"):
+                break
+            if a.lower() in ("n", "no", "否"):
+                print("已取消执行。")
+                return 0
+            plan = make_plan(client, task, feedback=a)  # 带修改意见重新生成
+        task = f"{task}\n\n已确认的执行计划：\n{plan}\n请严格按计划逐步执行。"
     skills = None
     if args.skill:
         from .skills import load_skills

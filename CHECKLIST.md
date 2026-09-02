@@ -312,6 +312,13 @@
 - [x] AV2 浮层选择只替换当前词（保留前置命令与后随任务）；`/skill` 词同样就地更新
 - [x] AV3 回归：pytest、node --check、无头垫片、真实冒烟
 
+## AW. 迭代 10 切片 10.1（/plan 两段式人工确认）
+
+- [x] AW1 Web `/plan`：生成计划后 `plan{status:pending}` 暂停**不执行**；确认栏 ✓确认/✎修改/✕取消
+- [x] AW2 确认 → `plan_text` 注入执行（`plan{status:confirmed}`）；修改 → `plan_feedback` 重新生成再暂停；取消不执行；重放可恢复确认栏
+- [x] AW3 CLI `--plan` 交互确认（y 执行 / n 取消 / 修改意见重新生成）；非交互视为取消
+- [x] AW4 计划生成失败降级直接执行；回归（pytest/node --check/垫片/真实冒烟）
+
 ## AR. 迭代 9 切片 9.4 内置技能
 
 - [x] AR1 内置 python-testing / code-review / web-frontend（SKILL.md + 资源）

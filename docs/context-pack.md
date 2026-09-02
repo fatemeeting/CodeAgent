@@ -1,22 +1,23 @@
 # context-pack.md — 当前阶段上下文包
 
-> 当前阶段：**迭代 9 · 修复切片 3（任意位置输入 / 弹出浮层）**
+> 当前阶段：**迭代 10 · 切片 10.1（/plan 两段式人工确认）**
 
 ## 当前阶段目标
 
-用户反馈：希望**每一次输入 `/`**（任意位置，含句中）都弹出命令浮层。现逻辑只认输入开头。改 `buildCmdPop.render`：以光标前最后一个 `/` 起的「当前词」判定——`/skill` 词 → 技能列表；其它无空格词且匹配命令前缀 → 命令列表；选择命令/技能时只替换当前词（保留前置命令与后随任务），其余行为（☑ 多选、任务文本收起、Esc/↑↓/Enter）不变。
+把 `/plan` 从「出计划后立即执行」改为**两段式**：先生成计划展示并暂停（`plan{status:pending}`，不执行工具循环），前端确认栏 ✓确认执行 / ✎修改计划 / ✕取消；确认后携带 `plan_text` 注入「已确认的执行计划」再执行（`plan{status:confirmed}`）；修改则带 `plan_feedback` 重新生成再次暂停；取消不执行。CLI `--plan` 同步改为交互确认（y/n/修改意见），非交互视为取消。计划生成失败降级直接执行。`/plan` 与 `/goal` 互斥、与 `/skill` 组合不变。
 
 ## 必须读
 
-- `SPEC.md` 第 30 节、`CHECKLIST.md` AV 节
-- `agent/web.py` 前端：`buildCmdPop`（render/命令项 onclick/技能项 act）、`lastSkillIndex`
+- `SPEC.md` 第 31 节、`CHECKLIST.md` AW 节
+- `agent/plan.py`（make_plan）、`agent/web.py`（`_handle_events` worker plan 分支、`handleEvent` plan 块、`sendTask`/`newTurnState`/`renderTraceFromEvents`）、`agent/cli.py`（--plan）
+- `tests/test_plan.py`、`tests/test_web.py`（`test_web_sse_chat_mode_readonly_and_plan`）
 
 ## 不得读 / 不得改
 
 - `.env`（真实凭据）
-- 后端与 `parseCommand`/`sendTask`（无需改）
+- `agent/loop.py`/`agent/llm.py`（无需改）
 
 ## 输出要求
 
-- 产出：`agent/web.py` 前端；契约文件
-- 验收：`pytest -q` 全绿（146）；`node --check` + 无头垫片（任意位置 `/`、词级替换、/skill 就地更新）；真实服务冒烟
+- 产出：`agent/plan.py`、`agent/web.py`、`agent/cli.py`、`tests/test_plan.py`、`tests/test_web.py`
+- 验收：`pytest -q` 全绿（约 152）；`node --check` + 无头垫片（确认/修改/取消/重放）；真实冒烟（plan=1 暂停 → plan_text 执行；CLI 交互确认）

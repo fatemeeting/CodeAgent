@@ -589,17 +589,109 @@ def test_web_sse_chat_mode_readonly_and_plan(tmp_path):
             tool_names = {t["function"]["name"] for t in captured["tools"]}
             assert tool_names == {"read_file", "list_directory", "search_content", "web_search"}
             assert "write_file" not in raw
-            # plan 模式
+            # plan 模式（两段式第一阶段）：只出计划，本轮不执行
             captured.clear()
             with urllib.request.urlopen(
                 f"http://127.0.0.1:{port}/events?task=" + urllib.parse.quote("实现登录") + "&plan=1"
             ) as resp:
                 raw2 = resp.read().decode("utf-8")
             assert '"type": "plan"' in raw2
-            last_user = next(
-                (m for m in reversed(captured["messages"]) if m["role"] == "user"), None
+            assert '"status": "pending"' in raw2
+            assert "已生成执行计划" in raw2
+            assert raw2.rstrip().endswith("[DONE]")
+            assert "messages" not in captured  # 未进入 run，chat_stream 未被调用
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_web_sse_plan_confirm_executes(tmp_path):
+    """/events?plan_text= 已确认计划 → plan confirmed 事件 + 注入执行。"""
+    server = ThreadingHTTPServer(("127.0.0.1", 0), AgentHandler)
+    server.config = _config()
+    server.workdir = "."
+    server.sessions = SessionStore(tmp_path / "data" / "sessions")
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = server.server_address[1]
+    client = mock.Mock()
+    captured = {}
+
+    def chat_stream(messages, tools=None, on_content=None, on_reasoning=None, on_retry=None):
+        captured["messages"] = [dict(m) for m in messages]
+        if on_content:
+            on_content("完成")
+        return _response("完成")
+
+    client.chat_stream = mock.Mock(side_effect=chat_stream)
+    try:
+        with mock.patch("agent.web.LLMClient", return_value=client):
+            url = (
+                f"http://127.0.0.1:{port}/events?task=" + urllib.parse.quote("实现登录")
+                + "&plan_text=" + urllib.parse.quote("1. 分析\n2. 实现")
             )
-            assert last_user and "已制定的执行计划" in last_user["content"]
+            with urllib.request.urlopen(url) as resp:
+                raw = resp.read().decode("utf-8")
+        assert '"type": "plan"' in raw and '"status": "confirmed"' in raw
+        last_user = next(
+            (m for m in reversed(captured["messages"]) if m["role"] == "user"), None
+        )
+        assert last_user and "已确认的执行计划" in last_user["content"]
+        assert "1. 分析" in last_user["content"]
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_web_sse_plan_feedback_regenerates(tmp_path):
+    """/events?plan=1&plan_feedback= 修改意见 → 重新生成 pending 计划，仍不执行。"""
+    server = ThreadingHTTPServer(("127.0.0.1", 0), AgentHandler)
+    server.config = _config()
+    server.workdir = "."
+    server.sessions = SessionStore(tmp_path / "data" / "sessions")
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = server.server_address[1]
+    client = mock.Mock()
+    client.chat_stream = mock.Mock(return_value=_response("完成"))
+    try:
+        with mock.patch("agent.web.LLMClient", return_value=client), mock.patch(
+            "agent.web.make_plan", return_value="1. 新计划"
+        ) as mp:
+            url = (
+                f"http://127.0.0.1:{port}/events?task=" + urllib.parse.quote("实现登录")
+                + "&plan=1&plan_feedback=" + urllib.parse.quote("先写测试再实现")
+            )
+            with urllib.request.urlopen(url) as resp:
+                raw = resp.read().decode("utf-8")
+        assert '"status": "pending"' in raw and "1. 新计划" in raw
+        assert mp.call_args.kwargs.get("feedback") == "先写测试再实现"
+        client.chat_stream.assert_not_called()  # 修改阶段也不执行
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_web_sse_plan_generation_failure_degrades(tmp_path):
+    """计划生成失败 → warn 事件 + 降级直接执行（不卡住用户）。"""
+    server = ThreadingHTTPServer(("127.0.0.1", 0), AgentHandler)
+    server.config = _config()
+    server.workdir = "."
+    server.sessions = SessionStore(tmp_path / "data" / "sessions")
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = server.server_address[1]
+    client = mock.Mock()
+    client.chat_stream = mock.Mock(return_value=_response("完成"))
+    try:
+        with mock.patch("agent.web.LLMClient", return_value=client), mock.patch(
+            "agent.web.make_plan", side_effect=RuntimeError("规划失败")
+        ):
+            url = f"http://127.0.0.1:{port}/events?task=" + urllib.parse.quote("实现登录") + "&plan=1"
+            with urllib.request.urlopen(url) as resp:
+                raw = resp.read().decode("utf-8")
+        assert '"severity": "warn"' in raw and "计划生成失败" in raw
+        client.chat_stream.assert_called_once()  # 降级后正常执行
     finally:
         server.shutdown()
         server.server_close()
